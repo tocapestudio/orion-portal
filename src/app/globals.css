@@ -1,8 +1,50 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f6fb;
+  --foreground: #101828;
+
+  /* Paleta ORION — navy/azul, coherente con la identidad visual
+     existente. Estructura y funcionalidad priman sobre el detalle
+     visual definitivo en esta fase. */
+  --orion-navy-950: #050b1a;
+  --orion-navy-900: #0a1530;
+  --orion-navy-800: #10203f;
+  --orion-navy-700: #172b52;
+  --orion-navy-600: #1f3a6e;
+  --orion-navy-500: #2b4f8f;
+  --orion-navy-400: #4a72b8;
+  --orion-navy-300: #7fa0d6;
+  --orion-navy-200: #b7c9e8;
+  --orion-navy-100: #e3eaf7;
+  --orion-accent: #3ddc97;
+
+  /* Azul/cian claro tomado directamente del swoosh del logo
+     (public/brand/icon.png) — no existia ningun token que representara
+     este tono: la escala orion-navy es azul marino/acero (mas indigo,
+     mas oscura en sus pasos "claros"), no el cian brillante del logo.
+     Un unico valor de marca, mismo patron que orion-accent (no una
+     escala 100-950), pensado para usarse con las utilidades de opacidad
+     de Tailwind (orion-sky/10, orion-sky/40, etc.) igual que orion-accent. */
+  --orion-sky: #4dc8e8;
+
+  /* Ocre — reservado para acciones de CREACION (crear/añadir/nuevo),
+     para distinguirlas visualmente de las acciones normales (que usan
+     orion-navy-700). Texto siempre azul marino sobre este fondo. */
+  --orion-ocre-600: #e8c34a;
+  --orion-ocre-500: #f2d478;
+
+  /* Melocoton/dorado suave — SOLO para el fondo del boton "Volver"
+     (BackButton.tsx/StaticBackLink.tsx), para que destaque un poco sobre
+     el fondo azul grisaceo claro de las pantallas (--background). NO
+     reutiliza orion-ocre-500/600: ese token esta reservado para acciones
+     de CREACION en toda la app, y usarlo aqui tambien confundiria ambos
+     significados (el boton Volver no crea nada). -100 es el fondo en
+     reposo, -200 el de hover (un paso mas intenso de la misma familia,
+     no una mezcla de opacidad - un hover por opacidad sobre un fondo ya
+     claro se ve lavado, no "mas intenso"). */
+  --orion-warm-200: #f3ce93;
+  --orion-warm-100: #f8dfb8;
 }
 
 @theme inline {
@@ -10,17 +52,63 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-orion-navy-950: var(--orion-navy-950);
+  --color-orion-navy-900: var(--orion-navy-900);
+  --color-orion-navy-800: var(--orion-navy-800);
+  --color-orion-navy-700: var(--orion-navy-700);
+  --color-orion-navy-600: var(--orion-navy-600);
+  --color-orion-navy-500: var(--orion-navy-500);
+  --color-orion-navy-400: var(--orion-navy-400);
+  --color-orion-navy-300: var(--orion-navy-300);
+  --color-orion-navy-200: var(--orion-navy-200);
+  --color-orion-navy-100: var(--orion-navy-100);
+  --color-orion-accent: var(--orion-accent);
+  --color-orion-sky: var(--orion-sky);
+  --color-orion-ocre-600: var(--orion-ocre-600);
+  --color-orion-ocre-500: var(--orion-ocre-500);
+  --color-orion-warm-200: var(--orion-warm-200);
+  --color-orion-warm-100: var(--orion-warm-100);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  /* Cursor coherente en todo el Portal: "pointer" en cualquier control
+     nativo realmente interactivo (botones, enlaces con href, selects,
+     checkboxes/radios y las <label> que los envuelven, ya que un clic en
+     la label activa el control) y "not-allowed" en su variante
+     deshabilitada. Vive en @layer base a proposito — cualquier clase
+     cursor-* explicita en un componente (utilities) sigue ganando por
+     encima de esto, asi que no pisa los "cursor-not-allowed" ya usados
+     en botones deshabilitados con estilos propios. No toca inputs de
+     texto/textarea/number/date ni contenedores no interactivos: esos
+     mantienen el cursor por defecto del navegador. */
+  button:not(:disabled),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  summary,
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  label:has(> input[type="checkbox"]:not(:disabled)),
+  label:has(> input[type="radio"]:not(:disabled)) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [type="button"]:disabled,
+  [type="submit"]:disabled,
+  [type="reset"]:disabled,
+  select:disabled,
+  input[type="checkbox"]:disabled,
+  input[type="radio"]:disabled {
+    cursor: not-allowed;
+  }
 }
