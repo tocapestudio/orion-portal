@@ -5,7 +5,7 @@ function AccessCard({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="flex h-24 flex-col items-center justify-center gap-2 rounded-xl border border-orion-navy-100 bg-white text-center text-xs font-medium text-orion-navy-800 shadow-sm transition hover:border-orion-navy-400 hover:shadow-md"
+      className="flex h-24 flex-col items-center justify-center gap-2 rounded-xl border border-orion-navy-100 bg-white text-center text-xs font-semibold text-orion-navy-800 shadow-sm transition hover:border-orion-navy-400 hover:shadow-md"
     >
       <NavIcon href={href} className="h-6 w-6 text-orion-navy-600" />
       {label.toUpperCase()}
@@ -37,7 +37,7 @@ function WideAccessButton({
   return (
     <Link
       href={href}
-      className={`relative flex h-16 items-center justify-center gap-2 rounded-xl border border-orion-navy-100 text-xs font-medium text-orion-navy-800 shadow-sm transition hover:shadow-md ${toneClasses}`}
+      className={`relative flex h-16 items-center justify-center gap-2 rounded-xl border border-orion-navy-100 text-xs font-semibold text-orion-navy-800 shadow-sm transition hover:shadow-md ${toneClasses}`}
     >
       <NavIcon href={href} className="h-6 w-6 shrink-0 text-orion-navy-600" />
       <span>{label.toUpperCase()}</span>
@@ -61,21 +61,21 @@ function WideAccessButton({
 export default function AccessGrid({ hasUnreadChats }: { hasUnreadChats: boolean }) {
   return (
     <section>
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-orion-navy-500">
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-orion-navy-500">
         Accesos principales
       </h2>
 
-      <div className="grid grid-cols-3 items-stretch gap-4">
-        <div className="col-span-2 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 items-stretch gap-3">
+        <div className="col-span-2 flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <AccessCard href="/mi-agenda" label="Mi Agenda" />
             <AccessCard href="/perfiles" label="Perfiles" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <AccessCard href="/disenar" label="Diseñar" />
             <AccessCard href="/biblioteca" label="Biblioteca" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <WideAccessButton href="/chat" label="Chat" showDot={hasUnreadChats} tone="green" />
             <WideAccessButton href="/configuracion" label="Configuración" tone="gray" />
           </div>

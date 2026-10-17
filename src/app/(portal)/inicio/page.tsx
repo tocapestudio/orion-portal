@@ -17,8 +17,8 @@ export default async function InicioPage() {
   const firstName = user?.fullName?.split(" ")[0] ?? user?.email ?? "";
 
   return (
-    <div className="mx-auto max-w-5xl space-y-7">
-      <section className="flex items-center gap-5">
+    <div className="mx-auto max-w-5xl space-y-5">
+      <section className="flex items-center gap-4">
         <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-orion-navy-200 text-orion-navy-700">
           {user?.avatarUrl ? (
             <Image

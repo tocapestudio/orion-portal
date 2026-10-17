@@ -44,8 +44,8 @@ export default function TodayAgendaWidget({ events }: { events: TodayEvent[] }) 
   const hiddenCount = events.length - visibleEvents.length;
 
   return (
-    <div className="rounded-xl border border-orion-navy-100 bg-white p-5">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="rounded-xl border border-orion-navy-100 bg-white p-4">
+      <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wide text-orion-navy-500">
           Agenda de hoy
         </p>
@@ -60,7 +60,7 @@ export default function TodayAgendaWidget({ events }: { events: TodayEvent[] }) 
         </p>
       )}
 
-      <div className="relative space-y-2">
+      <div className="relative space-y-1.5">
         {(() => {
           const nowLineIndex =
             nowMs === null
@@ -86,7 +86,7 @@ export default function TodayAgendaWidget({ events }: { events: TodayEvent[] }) 
             const isPast = nowMs !== null && (end || start) < nowMs;
 
             const content = (
-              <div className="flex items-center gap-3 rounded-lg border border-orion-navy-100 bg-white p-3 text-sm transition hover:border-orion-navy-400">
+              <div className="flex items-center gap-2.5 rounded-lg border border-orion-navy-100 bg-white p-2.5 text-sm transition hover:border-orion-navy-400">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${typeColor(e.type)}`} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-orion-navy-900">
