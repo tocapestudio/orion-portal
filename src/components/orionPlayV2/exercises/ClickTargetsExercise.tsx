@@ -362,6 +362,22 @@ interface PartialMetrics {
   avgTimeMs: number | null
 }
 
+/** Wrapper ESTABLE de migrateLegacyIntervalConfig para pasar a
+ * useExerciseFlow como `validateConfig` - declarado a nivel de modulo
+ * (mismo patron que validateReactionTimeConfig en ReactionTimeExercise.tsx)
+ * para que su referencia NUNCA cambie entre renders. useExerciseFlow.ts
+ * incluye `validateConfig` en el array de dependencias de su efecto de
+ * carga de localStorage (ver ese archivo) - una funcion inline aqui (como
+ * se definio originalmente) crea una referencia nueva en CADA render del
+ * componente, lo que reactiva ese efecto en cada render y, en cuanto
+ * existe algo guardado en localStorage, reaplica continuamente ese valor
+ * guardado sobre el estado - esto bloqueaba cualquier edicion posterior a
+ * guardar como predeterminada. Corrige ese bug sin tocar useExerciseFlow.ts
+ * ni ningun otro ejercicio. */
+function validateClickTargetsConfig(config: ExerciseConfig): ExerciseConfig {
+  return migrateLegacyIntervalConfig(config as unknown as Record<string, unknown>) as unknown as ExerciseConfig
+}
+
 // ============ COMPONENTE PRINCIPAL ============
 
 interface ClickTargetsExerciseProps {
@@ -393,9 +409,11 @@ export default function ClickTargetsExercise({ onComplete, canPersist = false, r
     // hook (`{...defaultConfig, ...validated}`) - sin esto, ese merge se
     // quedaria el interTargetDelayMs antiguo (campo ya inexistente en
     // ExerciseConfig) y descartaria silenciosamente la eleccion real que
-    // el usuario ya tenia guardada. Ver clickTargetsInterval.ts.
-    validateConfig: (config) =>
-      migrateLegacyIntervalConfig(config as unknown as Record<string, unknown>) as unknown as ExerciseConfig,
+    // el usuario ya tenia guardada. Ver clickTargetsInterval.ts. Referencia
+    // ESTABLE (declarada a nivel de modulo, ver validateClickTargetsConfig
+    // mas arriba) - NUNCA una funcion inline aqui, ver el comentario de esa
+    // funcion para el motivo exacto.
+    validateConfig: validateClickTargetsConfig,
   })
 
   // Estado especifico

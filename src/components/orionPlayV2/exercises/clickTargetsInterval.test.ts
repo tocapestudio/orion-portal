@@ -140,4 +140,31 @@ describe("migrateLegacyIntervalConfig", () => {
     assert.equal(INTERVAL_MIN_MS, 0);
     assert.equal(INTERVAL_MAX_MS, 2000);
   });
+
+  // Nota sobre el bug de "configuracion bloqueada" corregido junto a estas
+  // pruebas: la causa real era que ClickTargetsExercise.tsx pasaba
+  // `validateConfig` a useExerciseFlow como funcion INLINE, creando una
+  // referencia nueva en cada render y reactivando sin fin el efecto de
+  // carga de useExerciseFlow.ts (que entonces reaplicaba continuamente el
+  // ultimo valor guardado en localStorage, impidiendo editar). El arreglo
+  // (ver validateClickTargetsConfig en ClickTargetsExercise.tsx) es
+  // declarar esa funcion a nivel de modulo para que su referencia sea
+  // SIEMPRE la misma entre renders - una garantia estructural de JS (una
+  // function declaration de nivel de modulo tiene una unica instancia
+  // durante toda la vida del modulo), no algo que un test de esta funcion
+  // pueda ejercitar sin una libreria de renderizado de React (no instalada
+  // en este proyecto, y no se añade aqui). Lo que SI es razonable probar
+  // sin esa infraestructura es que la logica que esa funcion envuelve
+  // (migrateLegacyIntervalConfig) es determinista - si no lo fuera, incluso
+  // con una referencia estable, cada llamada repetida del efecto podria
+  // seguir produciendo un resultado distinto y manifestar un sintoma
+  // parecido.
+  test("es determinista: misma entrada -> mismo resultado (deep-equal) en llamadas repetidas, sin importar cuantas veces se invoque", () => {
+    const legacyInput = { endMode: "repetitions", interTargetDelayMs: 1200, targetColor: "#ff0000" };
+    const first = migrateLegacyIntervalConfig(legacyInput);
+    const second = migrateLegacyIntervalConfig(legacyInput);
+    const third = migrateLegacyIntervalConfig(legacyInput);
+    assert.deepEqual(first, second);
+    assert.deepEqual(second, third);
+  });
 });
