@@ -37,12 +37,29 @@
  *   registraba aciertos). "Ver desglose por objetivo" en
  *   ResultsScreen/StoppedScreen muestra Objetivo/Resultado/Tiempo.
  * - Feedback breve opcional entre ensayos (showFeedback, default true):
- *   ✓/✕ + ms durante FEEDBACK_DISPLAY_MS tras cada clic, antes de spawnear
- *   el siguiente target - ver handleContainerClick. reactionTimeMs se fija
- *   ANTES de esta pausa (en el propio clic), nunca la incluye. Si es false,
- *   el siguiente target aparece de inmediato, como en la version anterior.
- *   El FeedbackScreen de fin de ejercicio completo (flow.stage==='feedback')
- *   es un concepto distinto y no se toca.
+ *   ✓/✕ + ms tras cada clic. Puramente visual - ver mas abajo
+ *   (interTargetDelayMs) para la pausa real, que ya NO depende de este
+ *   campo. El FeedbackScreen de fin de ejercicio completo
+ *   (flow.stage==='feedback') es un concepto distinto y no se toca.
+ * - NUEVO: `interTargetDelayMs` (ExerciseConfig) - pausa configurable
+ *   (0-2000 ms) entre resolver un ensayo (acierto O fallo) y que aparezca
+ *   el siguiente target. Sustituye a la antigua constante fija
+ *   FEEDBACK_DISPLAY_MS (800 ms, ahora el valor por defecto de este campo,
+ *   para no cambiar el comportamiento ya existente de nadie que no toque
+ *   el nuevo control). Deliberadamente INDEPENDIENTE de showFeedback: con
+ *   interTargetDelayMs=0 ("Inmediato") el siguiente target aparece sin
+ *   pausa aunque showFeedback este activo (el ✓/✕ no llega a pintarse,
+ *   mismo lote de render que el nuevo target); con interTargetDelayMs>0 y
+ *   showFeedback=false, SI hay pausa pero sin feedback visual. Ver
+ *   handleContainerClick para la logica completa. reactionTimeMs se fija
+ *   ANTES de este punto (en el propio clic), nunca incluye la pausa
+ *   posterior - verificado explicitamente mas abajo.
+ * - NUEVO: "Mejor tiempo" (minimo de reactionTimeMs entre los ensayos con
+ *   outcome==='hit', null si no hay ningun acierto) en ResultsScreen y
+ *   StoppedScreen - ver getBestHitTimeMs en ./clickTargetsMetrics.ts
+ *   (funcion pura, con su propio test). Deriva de targetLog, que ya se
+ *   persistia antes de este cambio (buildClickTargetsResultRow) - no se
+ *   añade ningun campo nuevo a ClickTargetMetrics ni a la persistencia.
  *
  * Se mantiene sin cambios respecto a la adaptacion anterior: lectura del
  * area real via containerRef.getBoundingClientRect() (no useFullscreenSize),
@@ -68,6 +85,7 @@ import SpacebarHint from '../ui/SpacebarHint'
 import { useExerciseFlow } from '../lib/hooks'
 import type { ExerciseOutcome } from '../exercise-runner/ExerciseRunner'
 import { BACKGROUND_HEX, applyContrast } from '../lib/contrast'
+import { getBestHitTimeMs } from './clickTargetsMetrics'
 
 // ============ ICONOS (inline SVG, mismo set que ReactionTimeExercise.tsx) ============
 
@@ -213,12 +231,13 @@ const STORAGE_KEY = 'clickTargets_defaults'
  * garantiza que el circulo nunca toque la cruz central, con margen. */
 const FIXATION_EXCLUSION_MARGIN = 40
 
-/** Duracion del feedback breve (✓/✕ + ms) mostrado tras cada ensayo
- * cuando showFeedback === true, antes de que aparezca el siguiente
- * target. Mismo valor que RESULT_DISPLAY_MS en ReactionTimeExercise.tsx
- * (no se crea ninguna configuracion nueva para controlarlo, tal como se
- * pidio). */
-const FEEDBACK_DISPLAY_MS = 800
+/** Limites del slider de interTargetDelayMs (ExerciseConfig). 0 =
+ * "Inmediato". Paso de 100 ms, mismo orden de magnitud que el resto de
+ * controles de este ejercicio (p.ej. el slider de tamaño del target) -
+ * valor elegido para esta tarea, no un limite ya existente en el codigo. */
+const INTER_TARGET_DELAY_MIN_MS = 0
+const INTER_TARGET_DELAY_MAX_MS = 2000
+const INTER_TARGET_DELAY_STEP_MS = 100
 
 interface Target {
   id: number
@@ -245,12 +264,20 @@ interface ExerciseConfig {
    * a si randomPosition evita la zona central (ver FIXATION_EXCLUSION_MARGIN). */
   showFixation: boolean
   /** Si es true, tras resolver cada ensayo se muestra brevemente ✓/✕ + ms
-   * (FEEDBACK_DISPLAY_MS) antes de spawnear el siguiente target. Si es
-   * false, el siguiente target aparece de inmediato. Puramente de
-   * presentacion: reactionTimeMs ya se calcula ANTES de este punto (al
-   * resolverse el clic), por lo que nunca incluye la duracion del feedback -
+   * durante la pausa (ver interTargetDelayMs). Puramente de presentacion -
+   * NO decide cuanto dura la pausa, solo si es visible. Si es false, la
+   * misma pausa ocurre igual (si interTargetDelayMs > 0), solo que sin
+   * mostrar el ✓/✕. reactionTimeMs ya se calcula ANTES de este punto (al
+   * resolverse el clic), por lo que nunca incluye la duracion de la pausa -
    * ver handleContainerClick. */
   showFeedback: boolean
+  /** Pausa (ms) entre resolver un ensayo (acierto O fallo, sin distincion)
+   * y que aparezca el siguiente target. 0 = "Inmediato", sin pausa
+   * intencionada. Independiente de showFeedback (ver ese campo) y del
+   * tiempo de reaccion medido (reactionTimeMs se fija en el clic, antes de
+   * esta pausa) - ver handleContainerClick. Rango 0-2000 ms, ver
+   * INTER_TARGET_DELAY_MIN_MS/MAX_MS/STEP_MS. */
+  interTargetDelayMs: number
 }
 
 const DEFAULT_CONFIG: ExerciseConfig = {
@@ -262,6 +289,11 @@ const DEFAULT_CONFIG: ExerciseConfig = {
   contrastPercent: 100,
   showFixation: false,
   showFeedback: true,
+  // 800 ms: mismo valor que la antigua constante fija FEEDBACK_DISPLAY_MS -
+  // preserva el comportamiento actual (con showFeedback=true, que tambien
+  // es el default) para cualquier configuracion ya guardada que no
+  // contenga este campo nuevo (ver merge con defaults en useExerciseFlow.ts).
+  interTargetDelayMs: 800,
 }
 
 /** Registro de un unico ensayo (acierto o fallo), para "Ver desglose por
@@ -362,9 +394,9 @@ export default function ClickTargetsExercise({ onComplete, canPersist = false, r
   // Repetir, nueva apertura) - evita que un deadline de una ejecucion
   // anterior finalice por error la ejecucion siguiente.
   const deadlineTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Timer del feedback breve post-ensayo (solo si showFeedback === true).
+  // Timer de la pausa entre targets (solo si interTargetDelayMs > 0).
   // Se guarda para poder cancelarlo si el ejercicio termina por otra via
-  // (parada manual, deadline por tiempo) mientras el feedback esta visible.
+  // (parada manual, deadline por tiempo) mientras la pausa esta en curso.
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Captura de la configuracion EFECTIVA de esta ejecucion (fiabilidad de
@@ -479,11 +511,12 @@ export default function ClickTargetsExercise({ onComplete, canPersist = false, r
   // porque este callback puede ejecutarse minutos despues de haberse
   // programado - flow.stage en su closure original estaria obsoleto.
   //
-  // Si el deadline llega mientras se esta mostrando el feedback breve de
-  // un ensayo ya respondido (showFeedback === true), ese ensayo YA esta
-  // registrado en los refs (se registra en el clic, antes de programar el
-  // feedback) - finalizar aqui no genera ninguna respuesta ficticia ni
-  // descarta nada real, solo corta el feedback visual un poco antes.
+  // Si el deadline llega mientras esta en curso la pausa entre targets
+  // (interTargetDelayMs > 0) de un ensayo ya respondido, ese ensayo YA
+  // esta registrado en los refs (se registra en el clic, antes de
+  // programar la pausa) - finalizar aqui no genera ninguna respuesta
+  // ficticia ni descarta nada real, solo corta la pausa/feedback visual
+  // un poco antes.
   const finishByTime = useCallback(() => {
     if (flow.abortRef.current || stopRequestedRef.current) return
     stopRequestedRef.current = true
@@ -600,19 +633,33 @@ export default function ClickTargetsExercise({ onComplete, canPersist = false, r
       }
     }
 
-    if (flow.config.showFeedback) {
-      // Pausa breve y fija (FEEDBACK_DISPLAY_MS) antes de avanzar. Si
-      // finishByTime (deadline) o una parada manual se disparan durante
-      // esta pausa, marcan stopRequestedRef - este callback lo comprueba
-      // al ejecutarse y no hace nada, para no spawnear ni finalizar dos veces.
+    // Pausa configurable (interTargetDelayMs) antes de avanzar -
+    // DELIBERADAMENTE independiente de showFeedback (ver ExerciseConfig):
+    // ese campo solo decide si el ✓/✕ es VISIBLE durante la pausa (ver
+    // RunningScreen, condicion `config.showFeedback && lastOutcome !== null`),
+    // nunca cuanto dura. Se aplica igual tras un acierto o un fallo, sin
+    // distincion (pedido explicito). Si finishByTime (deadline), una
+    // parada manual, o el desmontaje del componente ocurren durante esta
+    // pausa, el callback no hace nada al ejecutarse - comprobando tanto
+    // stopRequestedRef (parada/deadline) como flow.abortRef.current
+    // (desmontaje real, puesto a true por el cleanup de useExerciseFlow) -
+    // para no spawnear ni finalizar dos veces, ni tocar estado de un
+    // componente ya desmontado.
+    if (flow.config.interTargetDelayMs > 0) {
       feedbackTimeoutRef.current = setTimeout(() => {
         feedbackTimeoutRef.current = null
-        if (stopRequestedRef.current) return
+        if (flow.abortRef.current || stopRequestedRef.current) return
         setLastOutcome(null)
         setLastTime(null)
         advance()
-      }, FEEDBACK_DISPLAY_MS)
+      }, flow.config.interTargetDelayMs)
     } else {
+      // "Inmediato": lastOutcome/lastTime se limpian en el mismo lote de
+      // render que advance() (que puede fijar un nuevo currentTarget) -
+      // React los aplica juntos, asi que el ✓/✕ nunca llega a pintarse
+      // visible, independientemente de showFeedback.
+      setLastOutcome(null)
+      setLastTime(null)
       advance()
     }
   }, [flow, currentTarget, trialsCompleted, isClickOnTarget, spawnNext, buildMetrics])
@@ -966,6 +1013,24 @@ function ConfigScreen({ config, setConfig, displayColor, defaultsSaved, onSaveDe
               ]}
               onChange={(v) => setConfig((c) => ({ ...c, showFeedback: v === 'show' }))}
             />
+            {/* Pausa entre targets: control independiente de Feedback (de
+                proposito, ver ExerciseConfig.interTargetDelayMs) - vive en
+                la MISMA seccion/celda de la rejilla, no una nueva (filosofia
+                antiscroll: no se añade una celda a la rejilla de 3 columnas).
+                Esto NO garantiza que la columna izquierda no crezca en
+                altura - solo que la FORMA de la rejilla no cambia; el alto
+                final de la tarjeta depende de la columna mas alta de las 3,
+                no verificado en navegador desde este archivo. */}
+            <p className={`${sectionLabel} mt-2.5`}>Pausa entre objetivos</p>
+            <div className="flex items-center gap-3">
+              <input type="range" min={INTER_TARGET_DELAY_MIN_MS} max={INTER_TARGET_DELAY_MAX_MS} step={INTER_TARGET_DELAY_STEP_MS}
+                value={config.interTargetDelayMs}
+                onChange={(e) => setConfig((c) => ({ ...c, interTargetDelayMs: parseInt(e.target.value, 10) }))}
+                className={sliderClass} />
+              <span className="whitespace-nowrap text-sm font-medium text-gray-900">
+                {config.interTargetDelayMs === 0 ? 'Inmediato' : `${config.interTargetDelayMs} ms`}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1153,6 +1218,8 @@ function StoppedScreen({ metrics, targetLog, onRepeat, onReconfigure, onBeforeEx
   // (roundsCompleted === 0) - un estado explicito en vez de una fila de
   // metricas en guiones sin contexto.
   const hasTargets = metrics.trialsCompleted > 0
+  // Mejora 2, misma logica/fuente que ResultsScreen - ver ese comentario.
+  const bestHitTimeMs = getBestHitTimeMs(targetLog)
 
   // Portal directo a document.body, mismo motivo que en ReactionTimeExercise.tsx.
   // Contenido interior (tarjeta + acciones + boton de salida) via
@@ -1181,6 +1248,7 @@ function StoppedScreen({ metrics, targetLog, onRepeat, onReconfigure, onBeforeEx
             <div className="flex justify-between text-sm"><span className="text-gray-600">Precisión</span><span className="text-gray-900 font-bold">{metrics.accuracyPercent.toFixed(1)}%</span></div>
             <div className="flex justify-between text-sm"><span className="text-gray-600">Tiempo total</span><span className="text-gray-900 font-bold">{(metrics.totalTimeMs / 1000).toFixed(2)} s</span></div>
             <div className="flex justify-between text-sm"><span className="text-gray-600">Tiempo medio</span><span className="text-gray-900 font-bold">{metrics.avgTimeMs !== null ? `${metrics.avgTimeMs} ms` : '—'}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-600">Mejor tiempo</span><span className="text-gray-900 font-bold">{bestHitTimeMs !== null ? `${bestHitTimeMs} ms` : 'Sin aciertos'}</span></div>
           </div>
         ) : (
           <p className="text-sm text-gray-500">
@@ -1284,12 +1352,16 @@ const METRIC_VALUE_COLOR: Record<string, string> = {
 
 /** Tarjeta de metrica compacta, usada por ResultsScreen (grid 3x2) para
  * que las 6 metricas quepan en el viewport sin provocar scroll de pagina -
- * ver filosofia anti-scroll en el comentario de ResultsScreen. */
-function MetricCard({ color, label, value }: { color: keyof typeof METRIC_CARD_BG; label: string; value: string | number }) {
+ * ver filosofia anti-scroll en el comentario de ResultsScreen. `sub`
+ * (opcional, Mejora 2 - mejor tiempo) se renderiza como una segunda linea
+ * pequeña DENTRO de la misma celda, deliberadamente para no añadir una
+ * 7a tarjeta a la rejilla (eso cambiaria su altura total). */
+function MetricCard({ color, label, value, sub }: { color: keyof typeof METRIC_CARD_BG; label: string; value: string | number; sub?: string }) {
   return (
     <div className={`rounded-lg p-2.5 text-center ${METRIC_CARD_BG[color]}`}>
       <p className={`text-xs ${METRIC_LABEL_COLOR[color]}`}>{label}</p>
       <p className={`text-lg font-bold sm:text-xl ${METRIC_VALUE_COLOR[color]}`}>{value}</p>
+      {sub && <p className={`text-[10px] ${METRIC_LABEL_COLOR[color]} opacity-80`}>{sub}</p>}
     </div>
   )
 }
@@ -1306,6 +1378,11 @@ function ResultsScreen({ metrics, avgTime, targetLog, onRepeat, onReconfigure, o
   onRepeat: () => void; onReconfigure: () => void; onBeforeExit?: () => void | Promise<void>
   onSave?: () => void; saveState?: ExerciseSaveState; saveError?: string | null
 }) {
+  // Mejora 2: mejor tiempo de reaccion entre los ACIERTOS (nunca fallos),
+  // derivado de targetLog (ya persistido antes de este cambio, ver
+  // buildClickTargetsResultRow) - no es un campo nuevo en ClickTargetMetrics
+  // ni en la persistencia, solo una lectura derivada para mostrar aqui.
+  const bestHitTimeMs = getBestHitTimeMs(targetLog)
   return (
     <div className="flex flex-col items-center">
       <ExerciseResultsCard
@@ -1320,7 +1397,12 @@ function ResultsScreen({ metrics, avgTime, targetLog, onRepeat, onReconfigure, o
       >
         <div className="grid grid-cols-3 gap-2">
           <MetricCard color="blue" label="Tiempo Total" value={`${(metrics.totalTimeMs / 1000).toFixed(2)}s`} />
-          <MetricCard color="gray" label="Tiempo Medio" value={`${avgTime} ms`} />
+          <MetricCard
+            color="gray"
+            label="Tiempo Medio"
+            value={`${avgTime} ms`}
+            sub={bestHitTimeMs !== null ? `Mejor: ${bestHitTimeMs} ms` : 'Sin aciertos'}
+          />
           <MetricCard color="gray" label="Objetivos" value={metrics.totalClicks} />
           <MetricCard color="amber" label="Precisión" value={`${metrics.accuracyPercent.toFixed(1)}%`} />
           <MetricCard color="green" label="Aciertos" value={metrics.hits} />
