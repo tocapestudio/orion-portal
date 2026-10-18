@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getMyActiveAthleteIds } from "@/lib/data/athletes";
 
 export interface TodayEvent {
   id: string;
@@ -14,27 +15,58 @@ export interface TodayEvent {
 /**
  * Eventos de HOY del profesional autenticado, para el resumen
  * operativo de Inicio. No sustituye a Mi Agenda: es solo lectura,
- * acotada al dia actual. RLS de calendar_events ya restringe a los
- * eventos del profesional. show_in_my_agenda=true es el mismo filtro de
+ * acotada al dia actual. show_in_my_agenda=true es el mismo filtro de
  * aplicacion que usa getMyCalendarEvents() — este widget es parte de la
  * agenda personal del profesional, asi que debe respetar igual la opcion
  * "Añadir a mi agenda" de los eventos creados desde el perfil del atleta.
+ *
+ * core.calendar_events no tiene columna professional_id: un evento
+ * pertenece al profesional de dos formas distintas (ver policies RLS
+ * "professional CRUD calendar de sus atletas" / "...propios sin
+ * atleta") - con atleta, via la relacion activa en athlete_professional;
+ * sin atleta, via created_by = este profesional. Se filtra
+ * explicitamente por ambas, ademas de RLS, porque "admin todo
+ * calendar_events" es global y mostraria los eventos de cualquiera.
  */
 export async function getTodayEvents(): Promise<TodayEvent[]> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No hay sesión activa");
+
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
 
-  const { data: events } = await supabase
-    .from("calendar_events")
-    .select("*")
-    .eq("show_in_my_agenda", true)
-    .gte("start_at", startOfDay)
-    .lt("start_at", endOfDay)
-    .order("start_at", { ascending: true });
+  const myActiveAthleteIds = await getMyActiveAthleteIds(supabase, user.id);
 
-  const rows = events ?? [];
+  const [{ data: ownEvents, error: ownError }, { data: athleteEvents, error: athleteError }] =
+    await Promise.all([
+      supabase
+        .from("calendar_events")
+        .select("*")
+        .eq("show_in_my_agenda", true)
+        .is("athlete_id", null)
+        .eq("created_by", user.id)
+        .gte("start_at", startOfDay)
+        .lt("start_at", endOfDay),
+      myActiveAthleteIds.length > 0
+        ? supabase
+            .from("calendar_events")
+            .select("*")
+            .eq("show_in_my_agenda", true)
+            .in("athlete_id", myActiveAthleteIds)
+            .gte("start_at", startOfDay)
+            .lt("start_at", endOfDay)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+  if (ownError) throw ownError;
+  if (athleteError) throw athleteError;
+
+  const rows = [...(ownEvents ?? []), ...(athleteEvents ?? [])].sort((a, b) =>
+    a.start_at.localeCompare(b.start_at)
+  );
   const athleteIds = Array.from(new Set(rows.map((e) => e.athlete_id).filter(Boolean))) as string[];
 
   const athleteMap = new Map<string, string>();

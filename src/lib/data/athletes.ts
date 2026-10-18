@@ -3,17 +3,59 @@ import type { Database } from "@/types/database.types";
 
 export type Athlete = Database["core"]["Tables"]["athletes"]["Row"];
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
 /**
- * Atletas del profesional autenticado. RLS ya devuelve
- * exclusivamente los suyos (core.is_professional_of_athlete) - no
- * hace falta (ni se debe) filtrar por professional_id aqui.
+ * IDs de los atletas con relacion ACTIVA con el profesional autenticado
+ * (core.athlete_professional, status='active' - misma condicion exacta
+ * que usa core.is_professional_of_athlete() del lado de RLS). No hay
+ * columna professional_id en core.athletes: el vinculo vive solo en
+ * esta tabla puente.
+ *
+ * Se añade como filtro explicito de aplicacion (ademas de RLS, no en
+ * su lugar) porque las policies "admin todo X" son globales: una
+ * cuenta con rol admin seguiria viendo todos los atletas via RLS
+ * aunque tambien tenga professional. Este filtro hace que las
+ * pantallas personales (Inicio/Perfiles/Mi Agenda) muestren siempre
+ * los atletas del profesional activo, tenga o no el rol admin.
+ *
+ * Lanza en caso de fallo real de la consulta - nunca lo convierte en
+ * lista vacia (eso haria indistinguible "sin atletas" de "error").
+ */
+export async function getMyActiveAthleteIds(
+  supabase: SupabaseServerClient,
+  professionalId: string
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("athlete_professional")
+    .select("athlete_id")
+    .eq("professional_id", professionalId)
+    .eq("status", "active");
+  if (error) throw error;
+  return (data ?? []).map((r) => r.athlete_id);
+}
+
+/**
+ * Atletas del profesional autenticado. Filtrados explicitamente por
+ * relacion activa (ver getMyActiveAthleteIds) - no basta con RLS
+ * porque las policies "admin todo athletes" son globales.
  */
 export async function getMyAthletes(): Promise<Athlete[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No hay sesión activa");
+
+  const athleteIds = await getMyActiveAthleteIds(supabase, user.id);
+  if (athleteIds.length === 0) return [];
+
+  const { data, error } = await supabase
     .from("athletes")
     .select("*")
+    .in("id", athleteIds)
     .order("full_name", { ascending: true });
+  if (error) throw error;
   return data ?? [];
 }
 
@@ -26,12 +68,22 @@ export async function getAthleteById(id: string): Promise<Athlete | null> {
 /**
  * Busqueda por nombre, ORION ID (athletes.short_id) o codigo
  * interno del profesional (athlete_professional.internal_code).
- * Sigue devolviendo solo lo que RLS ya permite ver.
+ * Acotada explicitamente a la relacion activa del profesional
+ * autenticado (ver getMyActiveAthleteIds) - no solo a lo que RLS
+ * permitiria ver, por la misma razon que getMyAthletes().
  */
 export async function searchMyAthletes(query: string): Promise<Athlete[]> {
   const supabase = await createClient();
   const trimmed = query.trim();
   if (!trimmed) return getMyAthletes();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No hay sesión activa");
+
+  const athleteIds = await getMyActiveAthleteIds(supabase, user.id);
+  if (athleteIds.length === 0) return [];
 
   const asNumber = Number(trimmed);
   const orFilters = [`full_name.ilike.%${trimmed}%`];
@@ -39,16 +91,22 @@ export async function searchMyAthletes(query: string): Promise<Athlete[]> {
     orFilters.push(`short_id.eq.${asNumber}`);
   }
 
-  const { data: byNameOrOrionId } = await supabase
-    .from("athletes")
-    .select("*")
-    .or(orFilters.join(","))
-    .order("full_name", { ascending: true });
-
-  const { data: byInternalCode } = await supabase
-    .from("athlete_professional")
-    .select("athlete_id, athletes(*)")
-    .ilike("internal_code", `%${trimmed}%`);
+  const [{ data: byNameOrOrionId, error: nameError }, { data: byInternalCode, error: codeError }] =
+    await Promise.all([
+      supabase
+        .from("athletes")
+        .select("*")
+        .in("id", athleteIds)
+        .or(orFilters.join(","))
+        .order("full_name", { ascending: true }),
+      supabase
+        .from("athlete_professional")
+        .select("athlete_id, athletes(*)")
+        .eq("professional_id", user.id)
+        .ilike("internal_code", `%${trimmed}%`),
+    ]);
+  if (nameError) throw nameError;
+  if (codeError) throw codeError;
 
   const fromInternalCode = (byInternalCode ?? [])
     .map((row) => row.athletes)
@@ -81,22 +139,34 @@ export interface AthleteRosterRow {
 
 /**
  * Listado completo del profesional (todos los programas), con el
- * estado de la relacion (athlete_professional.status) y los
- * programas de cada atleta ya resueltos, para la lista con
- * busqueda/orden/filtro de Perfiles. RLS ya restringe cada consulta
- * a lo que corresponde a este profesional/atleta - no se anade
- * ningun filtro manual por professional_id.
+ * estado de la relacion (siempre 'active' - ver getMyActiveAthleteIds)
+ * y los programas de cada atleta ya resueltos, para la lista con
+ * busqueda/orden/filtro de Perfiles. Acotado explicitamente a la
+ * relacion activa del profesional autenticado, no solo a lo que RLS
+ * permitiria ver (las policies "admin todo X" son globales).
  */
 export async function getMyAthleteRoster(): Promise<AthleteRosterRow[]> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No hay sesión activa");
 
-  const [{ data: athletes }, { data: relations }, { data: programs }] = await Promise.all([
-    supabase.from("athletes").select("id, full_name, short_id, profile_image").order("full_name"),
-    supabase.from("athlete_professional").select("athlete_id, status"),
-    supabase.from("athlete_programs").select("athlete_id, program_id"),
-  ]);
+  const athleteIds = await getMyActiveAthleteIds(supabase, user.id);
+  if (athleteIds.length === 0) return [];
 
-  const statusByAthlete = new Map((relations ?? []).map((r) => [r.athlete_id, r.status]));
+  const [{ data: athletes, error: athletesError }, { data: programs, error: programsError }] =
+    await Promise.all([
+      supabase
+        .from("athletes")
+        .select("id, full_name, short_id, profile_image")
+        .in("id", athleteIds)
+        .order("full_name"),
+      supabase.from("athlete_programs").select("athlete_id, program_id").in("athlete_id", athleteIds),
+    ]);
+  if (athletesError) throw athletesError;
+  if (programsError) throw programsError;
+
   const programsByAthlete = new Map<string, string[]>();
   for (const p of programs ?? []) {
     const list = programsByAthlete.get(p.athlete_id) ?? [];
@@ -108,7 +178,7 @@ export async function getMyAthleteRoster(): Promise<AthleteRosterRow[]> {
     id: a.id,
     full_name: a.full_name,
     short_id: a.short_id,
-    status: statusByAthlete.get(a.id) ?? "active",
+    status: "active",
     programIds: programsByAthlete.get(a.id) ?? [],
     profile_image: a.profile_image,
   }));
