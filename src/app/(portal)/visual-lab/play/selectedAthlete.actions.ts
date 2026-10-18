@@ -34,7 +34,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { isValidAthleteId } from "@/lib/selectedAthlete";
-import { getMyAthletes } from "@/lib/data/athletes";
+import { getMyAthletes, getMyActiveAthleteIds } from "@/lib/data/athletes";
 
 export interface SelectedAthleteResult {
   athleteId: string;
@@ -44,11 +44,19 @@ export interface SelectedAthleteResult {
 
 /**
  * Devuelve los datos minimos visibles del deportista (nombre, ORION ID)
- * SOLO si el profesional autenticado tiene acceso real segun RLS; null en
- * cualquier otro caso (id con formato invalido, atleta inexistente, o
- * atleta existente pero no autorizado para este profesional - los tres
- * casos se tratan igual desde fuera, sin distinguir cual fue, igual que
- * ya hace getAthleteById()).
+ * SOLO si el profesional autenticado tiene relacion ACTIVA real con el
+ * atleta (ver getMyActiveAthleteIds en @/lib/data/athletes) - no basta
+ * con que RLS deje pasar la consulta porque el usuario tiene rol admin.
+ * null en cualquier otro caso (id con formato invalido, sin sesion,
+ * atleta inexistente, o atleta existente pero no autorizado para este
+ * profesional - todos se tratan igual desde fuera, sin distinguir cual
+ * fue, igual que ya hace getAthleteById()). Un fallo real de CUALQUIERA
+ * de las dos consultas (relacion activa o el atleta en si) SIGUE
+ * propagandose (no se atrapa aqui) - solo las condiciones de "no
+ * accesible" se convierten en null, nunca un error de base de datos
+ * real. Los consumidores de esta funcion (AthleteSelectionGate,
+ * useVerifiedSelectedAthlete, react-access/route.ts) manejan ese
+ * rechazo explicitamente - ver esos archivos.
  */
 export async function getSelectedAthleteIfAccessible(
   athleteId: string
@@ -56,11 +64,20 @@ export async function getSelectedAthleteIfAccessible(
   if (!isValidAthleteId(athleteId)) return null;
 
   const supabase = await createClient();
-  const { data } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const athleteIds = await getMyActiveAthleteIds(supabase, user.id);
+  if (!athleteIds.includes(athleteId)) return null;
+
+  const { data, error } = await supabase
     .from("athletes")
     .select("id, full_name, short_id")
     .eq("id", athleteId)
     .maybeSingle();
+  if (error) throw error;
 
   if (!data) return null;
 

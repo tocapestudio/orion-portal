@@ -3,37 +3,16 @@ import type { Database } from "@/types/database.types";
 
 export type Athlete = Database["core"]["Tables"]["athletes"]["Row"];
 
-type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
-
 /**
- * IDs de los atletas con relacion ACTIVA con el profesional autenticado
- * (core.athlete_professional, status='active' - misma condicion exacta
- * que usa core.is_professional_of_athlete() del lado de RLS). No hay
- * columna professional_id en core.athletes: el vinculo vive solo en
- * esta tabla puente.
- *
- * Se añade como filtro explicito de aplicacion (ademas de RLS, no en
- * su lugar) porque las policies "admin todo X" son globales: una
- * cuenta con rol admin seguiria viendo todos los atletas via RLS
- * aunque tambien tenga professional. Este filtro hace que las
- * pantallas personales (Inicio/Perfiles/Mi Agenda) muestren siempre
- * los atletas del profesional activo, tenga o no el rol admin.
- *
- * Lanza en caso de fallo real de la consulta - nunca lo convierte en
- * lista vacia (eso haria indistinguible "sin atletas" de "error").
+ * getMyActiveAthleteIds() vive en su propio archivo (./athleteOwnership)
+ * para poder probarla con node --test: ese archivo no importa
+ * createClient a nivel de modulo (Node no puede resolver "@/lib/..."
+ * fuera del bundler de Next.js), este sí. Se re-exporta aqui para no
+ * cambiar ningun import existente (@/lib/data/athletes sigue siendo la
+ * ruta publica).
  */
-export async function getMyActiveAthleteIds(
-  supabase: SupabaseServerClient,
-  professionalId: string
-): Promise<string[]> {
-  const { data, error } = await supabase
-    .from("athlete_professional")
-    .select("athlete_id")
-    .eq("professional_id", professionalId)
-    .eq("status", "active");
-  if (error) throw error;
-  return (data ?? []).map((r) => r.athlete_id);
-}
+export { getMyActiveAthleteIds } from "./athleteOwnership";
+import { getMyActiveAthleteIds } from "./athleteOwnership";
 
 /**
  * Atletas del profesional autenticado. Filtrados explicitamente por
@@ -59,9 +38,26 @@ export async function getMyAthletes(): Promise<Athlete[]> {
   return data ?? [];
 }
 
+/**
+ * Un atleta concreto, SOLO si tiene relacion activa con el profesional
+ * autenticado (ver getMyActiveAthleteIds) - no basta con que RLS deje
+ * pasar la consulta porque el usuario tiene rol admin. Si el id no
+ * pertenece a este profesional, devuelve null ANTES de consultar
+ * "athletes" - nunca revela si el atleta existe o no para alguien sin
+ * acceso (mismo comportamiento para "no existe" y "no autorizado").
+ */
 export async function getAthleteById(id: string): Promise<Athlete | null> {
   const supabase = await createClient();
-  const { data } = await supabase.from("athletes").select("*").eq("id", id).maybeSingle();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No hay sesión activa");
+
+  const athleteIds = await getMyActiveAthleteIds(supabase, user.id);
+  if (!athleteIds.includes(id)) return null;
+
+  const { data, error } = await supabase.from("athletes").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
   return data ?? null;
 }
 

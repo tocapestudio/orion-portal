@@ -59,7 +59,17 @@ export async function POST(request: Request) {
       : null;
 
   if (athleteId) {
-    const athlete = await getSelectedAthleteIfAccessible(athleteId);
+    let athlete;
+    try {
+      athlete = await getSelectedAthleteIfAccessible(athleteId);
+    } catch {
+      // Fallo real de la comprobacion (red/consulta), no "no accesible":
+      // nunca se autoriza en este caso - se devuelve el mismo formato
+      // JSON estructurado que ya usa este endpoint (authorized:false +
+      // reason), con un codigo distinto (500) y sin exponer el error
+      // interno, para que React pueda distinguirlo de un 403 real.
+      return NextResponse.json({ authorized: false, reason: "check_failed" }, { status: 500 });
+    }
     if (!athlete) {
       return NextResponse.json({ authorized: false, reason: "athlete_not_accessible" }, { status: 403 });
     }

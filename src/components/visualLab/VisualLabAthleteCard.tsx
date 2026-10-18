@@ -67,7 +67,8 @@ const iconBtnClass =
   'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-orion-navy-500 transition-colors hover:bg-amber-100 hover:text-orion-navy-800'
 
 export default function VisualLabAthleteCard() {
-  const { isHydrated, athleteId, isChecking, verified, selectAthlete, clearAthlete } = useVerifiedSelectedAthlete()
+  const { isHydrated, athleteId, isChecking, verified, error, selectAthlete, clearAthlete, retry } =
+    useVerifiedSelectedAthlete()
   const [searchMode, setSearchMode] = useState(false)
 
   // Evita parpadeo: nada hasta confirmar si hay o no seleccion guardada.
@@ -78,8 +79,28 @@ export default function VisualLabAthleteCard() {
     setSearchMode(false)
   }
 
+  const hasError = Boolean(athleteId) && error && !searchMode
   const isPendingCheck = Boolean(athleteId) && isChecking && !searchMode
   const isVerifiedSelection = Boolean(athleteId) && !isChecking && verified !== null && !searchMode
+
+  // Fallo real de red/consulta (no "sin seleccion" ni "no accesible"):
+  // nunca se trata como seleccion valida - solo ofrece reintentar, sin
+  // perder el athleteId guardado ni mostrar la busqueda como si no
+  // hubiera nada seleccionado.
+  if (hasError) {
+    return (
+      <div className="mx-auto flex w-fit max-w-md items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+        <p className="text-sm text-red-700">No se pudo comprobar la selección.</p>
+        <button
+          type="button"
+          onClick={retry}
+          className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+        >
+          Reintentar
+        </button>
+      </div>
+    )
+  }
 
   if (isPendingCheck) {
     return (

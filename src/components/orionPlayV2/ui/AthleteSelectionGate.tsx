@@ -25,6 +25,11 @@
  *     [exerciseId]/demo. NUEVO en esta fase: antes caia al picker sin
  *     limpiar nada (ver nota de seguridad mas abajo). Nunca se usa una
  *     seleccion no verificada para entrar a una ejecucion real.
+ *   - La verificacion FALLA de verdad (red/consulta, no "no accesible")
+ *     -> estado 'error', con reintento manual. Nunca redirige a demo ni
+ *     a la ejecucion real, nunca limpia la seleccion guardada (podria
+ *     ser recuperable) - un fallo transitorio no debe tratarse igual
+ *     que "no tienes acceso", ni concede nada por si mismo.
  *
  * Seguridad: el UUID de localStorage (useSelectedAthlete) NUNCA se trata
  * como autorizacion - se re-verifica con getSelectedAthleteIfAccessible
@@ -54,12 +59,13 @@ import { useRouter } from 'next/navigation'
 import { useSelectedAthlete } from '@/lib/useSelectedAthlete'
 import { getSelectedAthleteIfAccessible } from '@/app/(portal)/visual-lab/play/selectedAthlete.actions'
 
-type GateStatus = 'checking' | 'redirecting'
+type GateStatus = 'checking' | 'redirecting' | 'error'
 
 export default function AthleteSelectionGate({ exerciseId, children }: { exerciseId: string; children: ReactNode }) {
   const router = useRouter()
   const { athleteId, isHydrated, clearAthlete } = useSelectedAthlete()
   const [status, setStatus] = useState<GateStatus>('checking')
+  const [retryKey, setRetryKey] = useState(0)
   const redirectedRef = useRef(false)
 
   useEffect(() => {
@@ -76,24 +82,52 @@ export default function AthleteSelectionGate({ exerciseId, children }: { exercis
     }
 
     let cancelled = false
-    getSelectedAthleteIfAccessible(athleteId).then((result) => {
-      if (cancelled || redirectedRef.current) return
-      redirectedRef.current = true
-      setStatus('redirecting')
-      if (result) {
-        router.replace(`/visual-lab/play/${exerciseId}/${athleteId}`)
-      } else {
-        // Seleccion invalida/revocada: se limpia (nunca se conserva una
-        // identidad no verificada) y se redirige a demo - misma salida
-        // que "sin seleccion", nunca a una ejecucion real.
-        clearAthlete()
-        router.replace(`/visual-lab/play/${exerciseId}/demo`)
-      }
-    })
+    setStatus('checking') // vuelve a "comprobando" en cada reintento, nunca se queda en 'error' a mitad
+    getSelectedAthleteIfAccessible(athleteId)
+      .then((result) => {
+        if (cancelled || redirectedRef.current) return
+        redirectedRef.current = true
+        setStatus('redirecting')
+        if (result) {
+          router.replace(`/visual-lab/play/${exerciseId}/${athleteId}`)
+        } else {
+          // Seleccion invalida/revocada: se limpia (nunca se conserva una
+          // identidad no verificada) y se redirige a demo - misma salida
+          // que "sin seleccion", nunca a una ejecucion real.
+          clearAthlete()
+          router.replace(`/visual-lab/play/${exerciseId}/demo`)
+        }
+      })
+      .catch(() => {
+        // Fallo real de red/consulta (no "no accesible"): NUNCA se trata
+        // como seleccion valida ni como via libre a la demo o a la
+        // ejecucion - no redirige a ningun sitio, no limpia la seleccion
+        // guardada (podria ser recuperable), solo ofrece reintentar. Sin
+        // esto, el gate se quedaria en 'checking' para siempre (el then()
+        // nunca se ejecuta si la promesa se rechaza).
+        if (cancelled) return
+        setStatus('error')
+      })
     return () => {
       cancelled = true
     }
-  }, [isHydrated, athleteId, exerciseId, router, clearAthlete])
+  }, [isHydrated, athleteId, exerciseId, router, clearAthlete, retryKey])
+
+  if (status === 'error') {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
+        <p className="font-semibold">No se pudo comprobar la selección activa.</p>
+        <p className="mt-1 text-red-600">Inténtalo de nuevo en unos segundos.</p>
+        <button
+          type="button"
+          onClick={() => setRetryKey((k) => k + 1)}
+          className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+        >
+          Reintentar
+        </button>
+      </div>
+    )
+  }
 
   // Mientras no se sabe todavia si hay que redirigir (localStorage sin
   // leer, verificacion en curso) o mientras ya se ha disparado una
