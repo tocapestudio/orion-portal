@@ -38,22 +38,28 @@
  *   ResultsScreen/StoppedScreen muestra Objetivo/Resultado/Tiempo.
  * - Feedback breve opcional entre ensayos (showFeedback, default true):
  *   ✓/✕ + ms tras cada clic. Puramente visual - ver mas abajo
- *   (interTargetDelayMs) para la pausa real, que ya NO depende de este
- *   campo. El FeedbackScreen de fin de ejercicio completo
- *   (flow.stage==='feedback') es un concepto distinto y no se toca.
- * - NUEVO: `interTargetDelayMs` (ExerciseConfig) - pausa configurable
- *   (0-2000 ms) entre resolver un ensayo (acierto O fallo) y que aparezca
- *   el siguiente target. Sustituye a la antigua constante fija
- *   FEEDBACK_DISPLAY_MS (800 ms, ahora el valor por defecto de este campo,
- *   para no cambiar el comportamiento ya existente de nadie que no toque
- *   el nuevo control). Deliberadamente INDEPENDIENTE de showFeedback: con
- *   interTargetDelayMs=0 ("Inmediato") el siguiente target aparece sin
- *   pausa aunque showFeedback este activo (el ✓/✕ no llega a pintarse,
- *   mismo lote de render que el nuevo target); con interTargetDelayMs>0 y
- *   showFeedback=false, SI hay pausa pero sin feedback visual. Ver
- *   handleContainerClick para la logica completa. reactionTimeMs se fija
- *   ANTES de este punto (en el propio clic), nunca incluye la pausa
- *   posterior - verificado explicitamente mas abajo.
+ *   (intervalMode) para la pausa real, que ya NO depende de este campo.
+ *   El FeedbackScreen de fin de ejercicio completo (flow.stage==='feedback')
+ *   es un concepto distinto y no se toca.
+ * - `intervalMode` (ExerciseConfig: 'immediate'|'fixed'|'random') - pausa
+ *   entre resolver un ensayo (acierto O fallo) y que aparezca el
+ *   siguiente target. 'immediate' = 0 ms, sin pausa. 'fixed' = siempre
+ *   fixedIntervalMs. 'random' = un valor NUEVO en [randomIntervalMinMs,
+ *   randomIntervalMaxMs] en CADA transicion, nunca cacheado - ver
+ *   resolveIntervalMs en ./clickTargetsInterval.ts (funcion pura, con su
+ *   propio test), llamada dentro de handleContainerClick. Sustituye al
+ *   campo `interTargetDelayMs` de una fase anterior (a su vez sucesor de
+ *   la antigua constante fija FEEDBACK_DISPLAY_MS=800ms, ahora el default
+ *   de fixedIntervalMs) - ver migrateLegacyIntervalConfig para la
+ *   traduccion de configuraciones ya guardadas con el campo antiguo.
+ *   Deliberadamente INDEPENDIENTE de showFeedback: con un resultado de 0
+ *   ms el siguiente target aparece sin pausa aunque showFeedback este
+ *   activo (el ✓/✕ no llega a pintarse, mismo lote de render que el
+ *   nuevo target); con pausa>0 y showFeedback=false, SI hay pausa pero
+ *   sin feedback visual. Ver handleContainerClick para la logica
+ *   completa. reactionTimeMs se fija ANTES de este punto (en el propio
+ *   clic), nunca incluye la pausa posterior - verificado explicitamente
+ *   mas abajo.
  * - NUEVO: "Mejor tiempo" (minimo de reactionTimeMs entre los ensayos con
  *   outcome==='hit', null si no hay ningun acierto) en ResultsScreen y
  *   StoppedScreen - ver getBestHitTimeMs en ./clickTargetsMetrics.ts
@@ -86,6 +92,14 @@ import { useExerciseFlow } from '../lib/hooks'
 import type { ExerciseOutcome } from '../exercise-runner/ExerciseRunner'
 import { BACKGROUND_HEX, applyContrast } from '../lib/contrast'
 import { getBestHitTimeMs } from './clickTargetsMetrics'
+import {
+  resolveIntervalMs,
+  migrateLegacyIntervalConfig,
+  LEGACY_FIXED_INTERVAL_DEFAULT_MS,
+  INTERVAL_MIN_MS,
+  INTERVAL_MAX_MS,
+  type IntervalMode,
+} from './clickTargetsInterval'
 
 // ============ ICONOS (inline SVG, mismo set que ReactionTimeExercise.tsx) ============
 
@@ -231,13 +245,18 @@ const STORAGE_KEY = 'clickTargets_defaults'
  * garantiza que el circulo nunca toque la cruz central, con margen. */
 const FIXATION_EXCLUSION_MARGIN = 40
 
-/** Limites del slider de interTargetDelayMs (ExerciseConfig). 0 =
- * "Inmediato". Paso de 100 ms, mismo orden de magnitud que el resto de
- * controles de este ejercicio (p.ej. el slider de tamaño del target) -
- * valor elegido para esta tarea, no un limite ya existente en el codigo. */
-const INTER_TARGET_DELAY_MIN_MS = 0
-const INTER_TARGET_DELAY_MAX_MS = 2000
-const INTER_TARGET_DELAY_STEP_MS = 100
+/** Limites de los sliders de pausa (fixedIntervalMs y los dos extremos de
+ * randomIntervalMinMs/MaxMs, ExerciseConfig). INTERVAL_MIN_MS/MAX_MS
+ * vienen de clickTargetsInterval.ts (misma constante que usa
+ * migrateLegacyIntervalConfig para recortar valores legacy fuera de
+ * rango), para que el slider nunca pueda mostrar un valor distinto del
+ * que esa migracion considera "en rango". Paso de 100 ms, mismo orden de
+ * magnitud que el resto de controles de este ejercicio (p.ej. el slider
+ * de tamaño del target) - valor elegido para esta tarea, no un limite ya
+ * existente en el codigo. */
+const INTERVAL_SLIDER_MIN_MS = INTERVAL_MIN_MS
+const INTERVAL_SLIDER_MAX_MS = INTERVAL_MAX_MS
+const INTERVAL_SLIDER_STEP_MS = 100
 
 interface Target {
   id: number
@@ -264,20 +283,35 @@ interface ExerciseConfig {
    * a si randomPosition evita la zona central (ver FIXATION_EXCLUSION_MARGIN). */
   showFixation: boolean
   /** Si es true, tras resolver cada ensayo se muestra brevemente ✓/✕ + ms
-   * durante la pausa (ver interTargetDelayMs). Puramente de presentacion -
-   * NO decide cuanto dura la pausa, solo si es visible. Si es false, la
-   * misma pausa ocurre igual (si interTargetDelayMs > 0), solo que sin
-   * mostrar el ✓/✕. reactionTimeMs ya se calcula ANTES de este punto (al
-   * resolverse el clic), por lo que nunca incluye la duracion de la pausa -
-   * ver handleContainerClick. */
+   * durante la pausa (ver intervalMode/resolveIntervalMs). Puramente de
+   * presentacion - NO decide cuanto dura la pausa, solo si es visible. Si
+   * es false, la misma pausa ocurre igual (si el modo la produce), solo
+   * que sin mostrar el ✓/✕. reactionTimeMs ya se calcula ANTES de este
+   * punto (al resolverse el clic), por lo que nunca incluye la duracion
+   * de la pausa - ver handleContainerClick. */
   showFeedback: boolean
-  /** Pausa (ms) entre resolver un ensayo (acierto O fallo, sin distincion)
-   * y que aparezca el siguiente target. 0 = "Inmediato", sin pausa
-   * intencionada. Independiente de showFeedback (ver ese campo) y del
-   * tiempo de reaccion medido (reactionTimeMs se fija en el clic, antes de
-   * esta pausa) - ver handleContainerClick. Rango 0-2000 ms, ver
-   * INTER_TARGET_DELAY_MIN_MS/MAX_MS/STEP_MS. */
-  interTargetDelayMs: number
+  /** Modo de pausa entre resolver un ensayo (acierto O fallo, sin
+   * distincion) y que aparezca el siguiente target - ver
+   * ./clickTargetsInterval.ts (resolveIntervalMs), que es la UNICA fuente
+   * de verdad de cuanto dura la pausa real en cada transicion. Sustituye
+   * al antiguo campo `interTargetDelayMs` (ver migrateLegacyIntervalConfig
+   * para la traduccion de configuraciones ya guardadas). Independiente de
+   * showFeedback (ver ese campo) y del tiempo de reaccion medido
+   * (reactionTimeMs se fija en el clic, antes de esta pausa) - ver
+   * handleContainerClick. */
+  intervalMode: IntervalMode
+  /** Pausa fija (ms), solo relevante si intervalMode === 'fixed'. Rango
+   * ver INTERVAL_SLIDER_MIN_MS/MAX_MS/STEP_MS. */
+  fixedIntervalMs: number
+  /** Extremos (ms) del intervalo aleatorio, solo relevantes si
+   * intervalMode === 'random' - ver resolveIntervalMs para la generacion
+   * (un valor nuevo en cada transicion, nunca cacheado). La UI
+   * (ConfigScreen) garantiza min<=max en todo momento ajustando el otro
+   * extremo si el usuario cruza el limite - resolveIntervalMs normaliza
+   * igualmente por si llegara un valor ya invertido de otra via (p.ej.
+   * una config editada a mano en localStorage). */
+  randomIntervalMinMs: number
+  randomIntervalMaxMs: number
 }
 
 const DEFAULT_CONFIG: ExerciseConfig = {
@@ -289,11 +323,14 @@ const DEFAULT_CONFIG: ExerciseConfig = {
   contrastPercent: 100,
   showFixation: false,
   showFeedback: true,
-  // 800 ms: mismo valor que la antigua constante fija FEEDBACK_DISPLAY_MS -
-  // preserva el comportamiento actual (con showFeedback=true, que tambien
-  // es el default) para cualquier configuracion ya guardada que no
-  // contenga este campo nuevo (ver merge con defaults en useExerciseFlow.ts).
-  interTargetDelayMs: 800,
+  // 'fixed' + 800 ms: mismo comportamiento que tenia el antiguo
+  // interTargetDelayMs por defecto (y, antes de eso, la constante fija
+  // FEEDBACK_DISPLAY_MS) - preserva el comportamiento actual para
+  // cualquier configuracion nueva o ya migrada que no cambie el modo.
+  intervalMode: 'fixed',
+  fixedIntervalMs: LEGACY_FIXED_INTERVAL_DEFAULT_MS,
+  randomIntervalMinMs: 500,
+  randomIntervalMaxMs: 2000,
 }
 
 /** Registro de un unico ensayo (acierto o fallo), para "Ver desglose por
@@ -351,6 +388,14 @@ export default function ClickTargetsExercise({ onComplete, canPersist = false, r
     storageKey: STORAGE_KEY,
     defaultConfig: DEFAULT_CONFIG,
     onComplete,
+    // Traduce una configuracion legacy (solo interTargetDelayMs) al nuevo
+    // modelo de 3 modos ANTES del merge con defaults que ya hace este
+    // hook (`{...defaultConfig, ...validated}`) - sin esto, ese merge se
+    // quedaria el interTargetDelayMs antiguo (campo ya inexistente en
+    // ExerciseConfig) y descartaria silenciosamente la eleccion real que
+    // el usuario ya tenia guardada. Ver clickTargetsInterval.ts.
+    validateConfig: (config) =>
+      migrateLegacyIntervalConfig(config as unknown as Record<string, unknown>) as unknown as ExerciseConfig,
   })
 
   // Estado especifico
@@ -394,7 +439,7 @@ export default function ClickTargetsExercise({ onComplete, canPersist = false, r
   // Repetir, nueva apertura) - evita que un deadline de una ejecucion
   // anterior finalice por error la ejecucion siguiente.
   const deadlineTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Timer de la pausa entre targets (solo si interTargetDelayMs > 0).
+  // Timer de la pausa entre targets (solo si resolveIntervalMs() devuelve >0).
   // Se guarda para poder cancelarlo si el ejercicio termina por otra via
   // (parada manual, deadline por tiempo) mientras la pausa esta en curso.
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -512,7 +557,7 @@ export default function ClickTargetsExercise({ onComplete, canPersist = false, r
   // programado - flow.stage en su closure original estaria obsoleto.
   //
   // Si el deadline llega mientras esta en curso la pausa entre targets
-  // (interTargetDelayMs > 0) de un ensayo ya respondido, ese ensayo YA
+  // (cualquier modo que resuelva >0 ms) de un ensayo ya respondido, ese ensayo YA
   // esta registrado en los refs (se registra en el clic, antes de
   // programar la pausa) - finalizar aqui no genera ninguna respuesta
   // ficticia ni descarta nada real, solo corta la pausa/feedback visual
@@ -633,31 +678,38 @@ export default function ClickTargetsExercise({ onComplete, canPersist = false, r
       }
     }
 
-    // Pausa configurable (interTargetDelayMs) antes de avanzar -
-    // DELIBERADAMENTE independiente de showFeedback (ver ExerciseConfig):
-    // ese campo solo decide si el ✓/✕ es VISIBLE durante la pausa (ver
-    // RunningScreen, condicion `config.showFeedback && lastOutcome !== null`),
-    // nunca cuanto dura. Se aplica igual tras un acierto o un fallo, sin
-    // distincion (pedido explicito). Si finishByTime (deadline), una
-    // parada manual, o el desmontaje del componente ocurren durante esta
-    // pausa, el callback no hace nada al ejecutarse - comprobando tanto
-    // stopRequestedRef (parada/deadline) como flow.abortRef.current
-    // (desmontaje real, puesto a true por el cleanup de useExerciseFlow) -
-    // para no spawnear ni finalizar dos veces, ni tocar estado de un
-    // componente ya desmontado.
-    if (flow.config.interTargetDelayMs > 0) {
+    // Pausa segun el modo configurado (intervalMode) antes de avanzar -
+    // resolveIntervalMs() es la UNICA fuente de verdad de cuanto dura,
+    // llamada aqui mismo (dentro de handleContainerClick, una vez por
+    // CADA clic) para que el modo 'random' genere un numero nuevo en
+    // cada transicion - nunca cachea, nunca reutiliza el valor de un
+    // ensayo anterior. DELIBERADAMENTE independiente de showFeedback (ver
+    // ExerciseConfig): ese campo solo decide si el ✓/✕ es VISIBLE durante
+    // la pausa (ver RunningScreen, condicion `config.showFeedback &&
+    // lastOutcome !== null`), nunca cuanto dura. Se aplica igual tras un
+    // acierto o un fallo, sin distincion (pedido explicito). Si
+    // finishByTime (deadline), una parada manual, o el desmontaje del
+    // componente ocurren durante esta pausa, el callback no hace nada al
+    // ejecutarse - comprobando tanto stopRequestedRef (parada/deadline)
+    // como flow.abortRef.current (desmontaje real, puesto a true por el
+    // cleanup de useExerciseFlow) - para no spawnear ni finalizar dos
+    // veces, ni tocar estado de un componente ya desmontado.
+    const delayMs = resolveIntervalMs(flow.config)
+    if (delayMs > 0) {
       feedbackTimeoutRef.current = setTimeout(() => {
         feedbackTimeoutRef.current = null
         if (flow.abortRef.current || stopRequestedRef.current) return
         setLastOutcome(null)
         setLastTime(null)
         advance()
-      }, flow.config.interTargetDelayMs)
+      }, delayMs)
     } else {
-      // "Inmediato": lastOutcome/lastTime se limpian en el mismo lote de
-      // render que advance() (que puede fijar un nuevo currentTarget) -
-      // React los aplica juntos, asi que el ✓/✕ nunca llega a pintarse
-      // visible, independientemente de showFeedback.
+      // "Inmediato" (o 'fixed'/'random' resolviendo a 0 ms, posible si el
+      // usuario configura un extremo en 0): lastOutcome/lastTime se
+      // limpian en el mismo lote de render que advance() (que puede fijar
+      // un nuevo currentTarget) - React los aplica juntos, asi que el
+      // ✓/✕ nunca llega a pintarse visible, independientemente de
+      // showFeedback.
       setLastOutcome(null)
       setLastTime(null)
       advance()
@@ -1014,23 +1066,76 @@ function ConfigScreen({ config, setConfig, displayColor, defaultsSaved, onSaveDe
               onChange={(v) => setConfig((c) => ({ ...c, showFeedback: v === 'show' }))}
             />
             {/* Pausa entre targets: control independiente de Feedback (de
-                proposito, ver ExerciseConfig.interTargetDelayMs) - vive en
-                la MISMA seccion/celda de la rejilla, no una nueva (filosofia
-                antiscroll: no se añade una celda a la rejilla de 3 columnas).
-                Esto NO garantiza que la columna izquierda no crezca en
-                altura - solo que la FORMA de la rejilla no cambia; el alto
-                final de la tarjeta depende de la columna mas alta de las 3,
-                no verificado en navegador desde este archivo. */}
+                proposito, ver ExerciseConfig.intervalMode) - vive en la
+                MISMA seccion/celda de la rejilla, no una nueva (filosofia
+                antiscroll: no se añade una celda a la rejilla de 3
+                columnas). Solo se muestran los controles del modo
+                seleccionado (nunca los 3 a la vez) para no ocupar espacio
+                innecesario - 'immediate' no añade ningun control debajo
+                del selector. Esto NO garantiza que la columna izquierda
+                no crezca en altura (el modo 'random', con 2 sliders, es
+                mas alto que 'fixed' con 1) - solo que la FORMA de la
+                rejilla no cambia; el alto final de la tarjeta depende de
+                la columna mas alta de las 3, no verificado en navegador
+                desde este archivo. */}
             <p className={`${sectionLabel} mt-2.5`}>Pausa entre objetivos</p>
-            <div className="flex items-center gap-3">
-              <input type="range" min={INTER_TARGET_DELAY_MIN_MS} max={INTER_TARGET_DELAY_MAX_MS} step={INTER_TARGET_DELAY_STEP_MS}
-                value={config.interTargetDelayMs}
-                onChange={(e) => setConfig((c) => ({ ...c, interTargetDelayMs: parseInt(e.target.value, 10) }))}
-                className={sliderClass} />
-              <span className="whitespace-nowrap text-sm font-medium text-gray-900">
-                {config.interTargetDelayMs === 0 ? 'Inmediato' : `${config.interTargetDelayMs} ms`}
-              </span>
-            </div>
+            <SegmentedToggle
+              value={config.intervalMode}
+              options={[
+                { value: 'immediate', label: 'Inmediato' },
+                { value: 'fixed', label: 'Fijo' },
+                { value: 'random', label: 'Aleatorio' },
+              ]}
+              onChange={(intervalMode) => setConfig((c) => ({ ...c, intervalMode }))}
+            />
+            {config.intervalMode === 'fixed' && (
+              <div className="mt-2 flex items-center gap-3">
+                <input type="range" min={INTERVAL_SLIDER_MIN_MS} max={INTERVAL_SLIDER_MAX_MS} step={INTERVAL_SLIDER_STEP_MS}
+                  value={config.fixedIntervalMs}
+                  onChange={(e) => setConfig((c) => ({ ...c, fixedIntervalMs: parseInt(e.target.value, 10) }))}
+                  className={sliderClass} />
+                <span className="whitespace-nowrap text-sm font-medium text-gray-900">{config.fixedIntervalMs} ms</span>
+              </div>
+            )}
+            {config.intervalMode === 'random' && (
+              <div className="mt-2 space-y-1.5">
+                {/* Los dos sliders se mantienen coherentes entre si SIN
+                    permitir min>max: al mover uno mas alla del otro, el
+                    otro extremo se desplaza para igualarlo (nunca se
+                    cruzan) - en vez de bloquear el gesto o mostrar un
+                    error, que seria menos claro para este tipo de control. */}
+                <div className="flex items-center gap-3">
+                  <span className="w-8 shrink-0 text-xs text-gray-500">Mín.</span>
+                  <input type="range" min={INTERVAL_SLIDER_MIN_MS} max={INTERVAL_SLIDER_MAX_MS} step={INTERVAL_SLIDER_STEP_MS}
+                    value={config.randomIntervalMinMs}
+                    onChange={(e) => {
+                      const randomIntervalMinMs = parseInt(e.target.value, 10)
+                      setConfig((c) => ({
+                        ...c,
+                        randomIntervalMinMs,
+                        randomIntervalMaxMs: Math.max(randomIntervalMinMs, c.randomIntervalMaxMs),
+                      }))
+                    }}
+                    className={sliderClass} />
+                  <span className="whitespace-nowrap text-sm font-medium text-gray-900">{config.randomIntervalMinMs} ms</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="w-8 shrink-0 text-xs text-gray-500">Máx.</span>
+                  <input type="range" min={INTERVAL_SLIDER_MIN_MS} max={INTERVAL_SLIDER_MAX_MS} step={INTERVAL_SLIDER_STEP_MS}
+                    value={config.randomIntervalMaxMs}
+                    onChange={(e) => {
+                      const randomIntervalMaxMs = parseInt(e.target.value, 10)
+                      setConfig((c) => ({
+                        ...c,
+                        randomIntervalMaxMs,
+                        randomIntervalMinMs: Math.min(c.randomIntervalMinMs, randomIntervalMaxMs),
+                      }))
+                    }}
+                    className={sliderClass} />
+                  <span className="whitespace-nowrap text-sm font-medium text-gray-900">{config.randomIntervalMaxMs} ms</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
