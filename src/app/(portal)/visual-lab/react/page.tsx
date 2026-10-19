@@ -21,16 +21,18 @@ import { ModuleIcon, MODULE_LABELS, MODULE_DEFINITIONS, StatusPill } from "../mo
  * se sustituira por un boton que abra la ventana de forma controlada -
  * no antes.
  *
- * `ORION_REACT_URL`: deliberadamente SIN valor inventado. Se lee de una
- * variable de entorno que todavia no existe en ningun .env de este
- * repo (confirmado en una investigacion previa) - hasta que no se
- * confirme la URL real de despliegue y alguien la añada a las
- * variables de entorno (fuera del alcance de esta tarea, que no las
- * modifica), esta constante sera siempre `null` y la pantalla muestra
- * el estado "pendiente de configuración" en vez de un enlace roto o
- * inventado.
+ * `ORION_REACT_URL`: `NEXT_PUBLIC_ORION_REACT_URL` sigue teniendo prioridad
+ * (permite apuntar a otra URL - p.ej. una preview - sin tocar codigo), pero
+ * ya existe un dominio definitivo y estable para ORION React
+ * (react.orionvisuallab.com), asi que ahora se usa como fallback en vez de
+ * `null` - evita mostrar "pendiente de configuración" cuando la variable
+ * de entorno no esta definida, que ya no es el caso real. La rama de
+ * "pendiente de configuración" de abajo queda como proteccion defensiva
+ * (nunca deberia alcanzarse ahora, salvo que alguien fije explicitamente
+ * la variable de entorno a una cadena vacia).
  */
-const ORION_REACT_URL = process.env.NEXT_PUBLIC_ORION_REACT_URL || null;
+const ORION_REACT_URL =
+  process.env.NEXT_PUBLIC_ORION_REACT_URL || "https://react.orionvisuallab.com";
 
 export default async function OrionReactPage() {
   const modalities = await getModalities();
