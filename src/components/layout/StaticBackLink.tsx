@@ -21,9 +21,9 @@ export default function StaticBackLink({
       href={href}
       aria-label={label}
       title={label}
-      // Mismo fondo calido que BackButton.tsx (--orion-warm-100/-200) -
-      // ver ese archivo para el motivo del cambio respecto a bg-white.
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-orion-navy-200 bg-orion-warm-100 text-orion-navy-600 transition-colors hover:border-orion-navy-300 hover:bg-orion-warm-200 hover:text-orion-navy-800"
+      // Mismo fondo azul claro que BackButton.tsx (--orion-navy-100/-200) -
+      // ver ese archivo para el motivo del cambio respecto al calido anterior.
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-orion-navy-200 bg-orion-navy-100 text-orion-navy-600 transition-colors hover:border-orion-navy-300 hover:bg-orion-navy-200 hover:text-orion-navy-800"
     >
       <svg
         viewBox="0 0 24 24"

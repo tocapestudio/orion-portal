@@ -47,13 +47,13 @@ export default function BackButton({
       onClick={handleClick}
       aria-label={label}
       title={label}
-      // Fondo melocoton/dorado suave (--orion-warm-100, hover
-      // --orion-warm-200 - ver globals.css) en vez de blanco, para
-      // destacar sobre el fondo azul grisaceo claro de las pantallas
-      // (bg-orion-navy-100/40 en el <main> del Portal). Icono/borde
-      // siguen en navy (contraste ya adecuado sobre un fondo claro,
-      // calido u oscuro): no se tocan.
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-orion-navy-200 bg-orion-warm-100 text-orion-navy-600 transition-colors hover:border-orion-navy-300 hover:bg-orion-warm-200 hover:text-orion-navy-800"
+      // Fondo azul claro (--orion-navy-100, hover --orion-navy-200 - ver
+      // globals.css), en vez del melocoton/dorado calido anterior
+      // (--orion-warm-100/200) - pedido explicito para que combine con el
+      // fondo general y los tonos azul marino de ORION, en vez de
+      // destacar por contraste de temperatura de color. Icono/borde
+      // siguen en navy, sin cambios.
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-orion-navy-200 bg-orion-navy-100 text-orion-navy-600 transition-colors hover:border-orion-navy-300 hover:bg-orion-navy-200 hover:text-orion-navy-800"
     >
       <svg
         viewBox="0 0 24 24"
