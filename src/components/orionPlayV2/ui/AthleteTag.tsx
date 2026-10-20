@@ -69,7 +69,7 @@ export default function AthleteTag({ fullName }: { fullName?: string }) {
   if (!fullName || isDemoPathname(pathname)) return null
 
   return (
-    <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-orion-navy-200 bg-white px-2.5 text-xs">
+    <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-orion-navy-200 bg-amber-50 px-2.5 text-xs">
       <UserIcon className="h-3.5 w-3.5 shrink-0 text-orion-navy-500" />
       <span className="max-w-[9rem] truncate font-medium text-orion-navy-700" title={fullName}>
         {fullName}
