@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getMyActiveAthleteIds } from "@/lib/data/athleteOwnership";
 import {
   isReactionTimeMetrics,
   type ReactionTimeMetrics,
@@ -292,6 +293,29 @@ export async function submitPlayAttempt(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sesión no válida." };
+
+  // Autorizacion de ESCRITURA explicita a nivel de aplicacion - mismo
+  // principio ya aplicado en las funciones de lectura de athletes.ts
+  // (getAthleteById/getAthletePlayResults/getSelectedAthleteIfAccessible):
+  // las policies "admin todo sessions/session_activities/results" son
+  // globales (USING/WITH CHECK (core.auth_has_role('admin'))), asi que
+  // RLS por si sola NO basta para impedir que una cuenta con rol admin
+  // sin relacion profesional activa escriba sesiones/resultados para un
+  // atleta ajeno - ver auditoria previa. getMyActiveAthleteIds() nunca
+  // consulta ni depende de ningun rol, asi que el resultado es el mismo
+  // para admin que para cualquier otro profesional sin esa relacion.
+  // Se comprueba ANTES de cualquier lectura de idempotencia/recuperacion
+  // de escritura parcial y de cualquier INSERT, para que ninguno de esos
+  // caminos pueda ejecutarse con un athleteId no autorizado.
+  let activeAthleteIds: string[];
+  try {
+    activeAthleteIds = await getMyActiveAthleteIds(supabase, user.id);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "No se pudo verificar el acceso al deportista." };
+  }
+  if (!activeAthleteIds.includes(athleteId)) {
+    return { error: "No tienes una relación profesional activa con este deportista." };
+  }
 
   const now = new Date().toISOString();
   const sessionStatus = outcome === "interrupted" ? "cancelled" : "completed";
