@@ -47,13 +47,16 @@ export default function BackButton({
       onClick={handleClick}
       aria-label={label}
       title={label}
-      // Fondo azul claro (--orion-navy-100, hover --orion-navy-200 - ver
-      // globals.css), en vez del melocoton/dorado calido anterior
-      // (--orion-warm-100/200) - pedido explicito para que combine con el
-      // fondo general y los tonos azul marino de ORION, en vez de
-      // destacar por contraste de temperatura de color. Icono/borde
-      // siguen en navy, sin cambios.
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-orion-navy-200 bg-orion-navy-100 text-orion-navy-600 transition-colors hover:border-orion-navy-300 hover:bg-orion-navy-200 hover:text-orion-navy-800"
+      // Fondo azul marino solido (--orion-navy-950, el mismo token exacto
+      // que usa el fondo de Sidebar.tsx) en vez del azul claro anterior
+      // (--orion-navy-100/200) - ese tenia muy poco contraste contra el
+      // fondo general de las pantallas. Icono blanco (text-white) para
+      // garantizar contraste sobre un fondo casi negro. Hover un paso mas
+      // claro en la misma escala (--orion-navy-900). Sin borde: uno claro
+      // desentonaria contra este fondo, y el propio bg-orion-navy-950 ya
+      // define la caja con suficiente contraste sobre cualquier fondo
+      // claro del Portal.
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orion-navy-950 text-white transition-colors hover:bg-orion-navy-900"
     >
       <svg
         viewBox="0 0 24 24"

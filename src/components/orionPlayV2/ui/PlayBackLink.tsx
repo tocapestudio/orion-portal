@@ -13,14 +13,13 @@
  * de centrado (`mx-auto max-w-6xl`) de ReactionTimeExercise.tsx/
  * ClickTargetsExercise.tsx/VisualMemoryExercise.tsx (no se tocan).
  *
- * Mismo glifo Y mismo aspecto visual (caja 32x32, borde fino, rounded-lg,
- * hover/focus) que BackButton.tsx/StaticBackLink.tsx (el boton "Volver"
- * del catalogo de ORION Play y del resto del Portal). Fondo azul claro
- * (--orion-navy-100, hover --orion-navy-200 - ver globals.css), igual que
- * esos dos componentes tras su propio cambio de color - antes era
- * bg-white en reposo (unico punto distinto respecto a BackButton.tsx,
- * que ya usaba bg-orion-navy-100 solo en hover). Borde/icono ya eran
- * azul marino desde antes, sin cambios.
+ * Mismo glifo Y mismo aspecto visual (caja 32x32, rounded-lg, hover/focus)
+ * que BackButton.tsx/StaticBackLink.tsx (el boton "Volver" del catalogo
+ * de ORION Play y del resto del Portal). Fondo azul marino solido
+ * (--orion-navy-950, el mismo token que Sidebar.tsx), icono blanco
+ * (text-white), hover un paso mas claro (--orion-navy-900), sin borde -
+ * mismo cambio y mismo motivo que esos dos componentes (el azul claro
+ * anterior tenia muy poco contraste).
  *
  * Destino fijo /visual-lab/play (no router.back()): mismo criterio que
  * StaticBackLink.tsx para pantallas donde "Volver" no debe depender del
@@ -38,7 +37,7 @@ export default function PlayBackLink() {
       onClick={() => router.push('/visual-lab/play')}
       title="Volver a ORION Play"
       aria-label="Volver a ORION Play"
-      className="absolute left-0 top-0 z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-orion-navy-200 bg-orion-navy-100 text-orion-navy-600 transition-colors hover:border-orion-navy-300 hover:bg-orion-navy-200 hover:text-orion-navy-800"
+      className="absolute left-0 top-0 z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orion-navy-950 text-white transition-colors hover:bg-orion-navy-900"
     >
       <svg
         viewBox="0 0 24 24"
