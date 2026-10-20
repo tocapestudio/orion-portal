@@ -60,7 +60,7 @@ export default async function PlayRunExercisePage({
 
   if (exercise.id === "reaction-time") {
     return (
-      <PlayExerciseShell athleteLabel={athlete.full_name}>
+      <PlayExerciseShell>
         <ReactionTimeV2Runner contextLabel={athlete.full_name} athleteId={athleteId} />
       </PlayExerciseShell>
     );
@@ -68,7 +68,7 @@ export default async function PlayRunExercisePage({
 
   if (exercise.id === "click-targets") {
     return (
-      <PlayExerciseShell athleteLabel={athlete.full_name}>
+      <PlayExerciseShell>
         <ClickTargetsV2Runner contextLabel={athlete.full_name} athleteId={athleteId} />
       </PlayExerciseShell>
     );
@@ -76,7 +76,7 @@ export default async function PlayRunExercisePage({
 
   if (exercise.id === "visual-memory-precision") {
     return (
-      <PlayExerciseShell athleteLabel={athlete.full_name}>
+      <PlayExerciseShell>
         <VisualMemoryV2Runner contextLabel={athlete.full_name} athleteId={athleteId} />
       </PlayExerciseShell>
     );
@@ -84,7 +84,7 @@ export default async function PlayRunExercisePage({
 
   if (exercise.id === "simple-reaction") {
     return (
-      <PlayExerciseShell athleteLabel={athlete.full_name}>
+      <PlayExerciseShell>
         <SimpleReactionV2Runner contextLabel={athlete.full_name} athleteId={athleteId} />
       </PlayExerciseShell>
     );

@@ -10,24 +10,22 @@
  * disenar, chat, el resto de ORION Play...), que siguen usando el boton
  * "Volver" rectangular de siempre.
  *
- * `athleteLabel` (nuevo, ajuste visual posterior a la Fase 3): nombre YA
- * RESUELTO server-side (getAthleteById, en [athleteId]/page.tsx) del
- * atleta de ESTA ejecucion - se reenvia a AthleteTag.tsx para la
- * etiqueta compacta junto al boton de volver, sustituyendo a la linea de
- * texto `contextLabel` que cada *V2Runner.tsx renderizaba antes (ver
- * esos archivos). Opcional: ausente en demo/page.tsx (nunca hay atleta
- * real ahi), AthleteTag.tsx no renderiza nada en ese caso.
+ * AthleteTag.tsx YA NO se renderiza aqui (corregido un problema visual:
+ * se solapaba con el titulo de cada ejercicio, que empieza en el mismo
+ * punto arriba a la izquierda). Ahora se renderiza DENTRO de cada
+ * *Exercise.tsx, como hermano real del titulo en una fila flex - ver
+ * ReactionTimeExercise.tsx/ClickTargetsExercise.tsx/
+ * VisualMemoryExercise.tsx/SimpleReactionExercise.tsx. Este Shell sigue
+ * aportando solo PlayBackLink.tsx (sin cambios, sigue `absolute`).
  */
 
 import type { ReactNode } from 'react'
 import PlayBackLink from './PlayBackLink'
-import AthleteTag from './AthleteTag'
 
-export default function PlayExerciseShell({ athleteLabel, children }: { athleteLabel?: string; children: ReactNode }) {
+export default function PlayExerciseShell({ children }: { children: ReactNode }) {
   return (
     <div className="relative">
       <PlayBackLink />
-      <AthleteTag fullName={athleteLabel} />
       {children}
     </div>
   )

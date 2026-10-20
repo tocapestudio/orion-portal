@@ -59,6 +59,7 @@ import ExerciseStopButton from '../ui/ExerciseStopButton'
 import ExerciseResultsCard from '../ui/ExerciseResultsCard'
 import type { ExerciseSaveState } from '../ui/ExerciseSaveButton'
 import SpacebarHint from '../ui/SpacebarHint'
+import AthleteTag from '../ui/AthleteTag'
 import { useExerciseFlow } from '../lib/hooks'
 import type { ExerciseOutcome } from '../exercise-runner/ExerciseRunner'
 import { BACKGROUND_HEX, applyContrast } from '../lib/contrast'
@@ -259,9 +260,13 @@ interface SimpleReactionExerciseProps {
    * detalle en ReactionTimeExercise.tsx (el bug real del bucle infinito
    * de renders que motiva el patron de refs usado mas abajo). */
   registerSpacebarStart?: (handler: (() => void) | null) => void
+  /** Nombre del atleta de esta ejecucion (SimpleReactionV2Runner.tsx,
+   * reenvia su propio `contextLabel`) - se muestra junto al h1 de abajo
+   * via AthleteTag. Ausente en demo, igual que contextLabel. */
+  athleteLabel?: string
 }
 
-export default function SimpleReactionExercise({ onComplete, canPersist = false, registerSpacebarStart }: SimpleReactionExerciseProps) {
+export default function SimpleReactionExercise({ onComplete, canPersist = false, registerSpacebarStart, athleteLabel }: SimpleReactionExerciseProps) {
   const flow = useExerciseFlow<ExerciseConfig, SimpleReactionMetrics>({
     storageKey: STORAGE_KEY,
     defaultConfig: DEFAULT_CONFIG,
@@ -602,9 +607,19 @@ export default function SimpleReactionExercise({ onComplete, canPersist = false,
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="mb-3">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Tiempo de reacción</h1>
-        <p className="text-sm text-gray-600">Responde en cuanto aparezca el estímulo. Responder antes de tiempo cuenta como anticipación, no como acierto.</p>
+      {/* Fila flex real (no absolute) entre el titulo y la etiqueta del
+          atleta - evita el solapamiento que habia antes (AthleteTag
+          flotaba via PlayExerciseShell.tsx, por encima de este mismo
+          punto). items-start porque la etiqueta es mas baja que el
+          bloque titulo+subtitulo; flex-wrap para que en pantallas
+          estrechas la etiqueta pase a su propia linea en vez de
+          solaparse o forzar scroll horizontal. */}
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Tiempo de reacción</h1>
+          <p className="text-sm text-gray-600">Responde en cuanto aparezca el estímulo. Responder antes de tiempo cuenta como anticipación, no como acierto.</p>
+        </div>
+        <AthleteTag fullName={athleteLabel} />
       </div>
 
       {flow.stage === 'config' && (

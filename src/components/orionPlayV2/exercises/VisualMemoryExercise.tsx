@@ -112,6 +112,7 @@ import ExerciseStopButton from '../ui/ExerciseStopButton'
 import ExerciseResultsCard from '../ui/ExerciseResultsCard'
 import type { ExerciseSaveState } from '../ui/ExerciseSaveButton'
 import SpacebarHint from '../ui/SpacebarHint'
+import AthleteTag from '../ui/AthleteTag'
 import { useExerciseFlow } from '../lib/hooks'
 import type { ExerciseOutcome } from '../exercise-runner/ExerciseRunner'
 import { BACKGROUND_HEX, applyContrast } from '../lib/contrast'
@@ -457,9 +458,13 @@ interface VisualMemoryExerciseProps {
    * pulsa Espacio, arranca el ejercicio" SOLO mientras flow.stage==='config'
    * (ver el useEffect mas abajo que lo registra/desregistra). */
   registerSpacebarStart?: (handler: (() => void) | null) => void
+  /** Nombre del atleta de esta ejecucion (VisualMemoryV2Runner.tsx,
+   * reenvia su propio `contextLabel`) - se muestra junto al h1 de abajo
+   * via AthleteTag. Ausente en demo, igual que contextLabel. */
+  athleteLabel?: string
 }
 
-export default function VisualMemoryExercise({ onComplete, canPersist = false, registerSpacebarStart }: VisualMemoryExerciseProps) {
+export default function VisualMemoryExercise({ onComplete, canPersist = false, registerSpacebarStart, athleteLabel }: VisualMemoryExerciseProps) {
   const flow = useExerciseFlow<ExerciseConfig, VisualMemoryMetrics>({
     storageKey: STORAGE_KEY,
     defaultConfig: DEFAULT_CONFIG,
@@ -874,9 +879,19 @@ export default function VisualMemoryExercise({ onComplete, canPersist = false, r
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="mb-2">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Visual Memory Precision</h1>
-        <p className="text-sm text-gray-600">Memoriza el patrón y selecciona las celdas correctas.</p>
+      {/* Fila flex real (no absolute) entre el titulo y la etiqueta del
+          atleta - evita el solapamiento que habia antes (AthleteTag
+          flotaba via PlayExerciseShell.tsx, por encima de este mismo
+          punto). items-start porque la etiqueta es mas baja que el
+          bloque titulo+subtitulo; flex-wrap para que en pantallas
+          estrechas la etiqueta pase a su propia linea en vez de
+          solaparse o forzar scroll horizontal. */}
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Visual Memory Precision</h1>
+          <p className="text-sm text-gray-600">Memoriza el patrón y selecciona las celdas correctas.</p>
+        </div>
+        <AthleteTag fullName={athleteLabel} />
       </div>
 
       {flow.stage === 'config' && (

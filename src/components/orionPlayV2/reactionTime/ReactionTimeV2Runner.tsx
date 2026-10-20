@@ -33,8 +33,11 @@
  * Cabecera sin "ORION Play" ni repeticion del nombre del ejercicio: ese
  * contexto ya esta dado por la navegacion (Visual Lab -> ORION Play) y
  * por el propio h1 "Go/No Go" que ya renderiza ReactionTimeExercise.tsx.
- * Esta franja superior, ahora, solo aporta lo que ReactionTimeExercise.tsx
- * no sabe: el nombre del atleta (contextLabel) y el badge de modo demo.
+ * Esta franja superior, ahora, solo aporta el badge de modo demo -
+ * `contextLabel` se reenvia a ReactionTimeExercise.tsx como `athleteLabel`
+ * para que la etiqueta del atleta se renderice junto a su propio h1 (ver
+ * ese archivo), en vez de flotar por separado via PlayExerciseShell.tsx
+ * (corrige el solapamiento visual que tenia antes).
  */
 
 import ExerciseRunner, { type ExerciseOutcome } from '@/components/orionPlayV2/exercise-runner/ExerciseRunner'
@@ -63,13 +66,6 @@ export default function ReactionTimeV2Runner({ contextLabel, athleteId }: { cont
 
   return (
     <div className="mx-auto max-w-6xl">
-      {/* Nombre del atleta eliminado de aqui (ajuste visual posterior a la
-          Fase 3): ahora lo muestra AthleteTag.tsx, junto al boton de volver
-          (ver PlayExerciseShell.tsx) - evita la duplicacion que habia junto
-          al titulo del ejercicio. contextLabel/isDemo siguen intactos: la
-          condicion real de "modo demo" sigue siendo Boolean(athleteId)/
-          !contextLabel, sin cambios funcionales, solo deja de renderizarse
-          como texto aqui. */}
       {isDemo && (
         <div className="mb-2 flex justify-end">
           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
@@ -83,6 +79,7 @@ export default function ReactionTimeV2Runner({ contextLabel, athleteId }: { cont
             onComplete={onComplete}
             canPersist={Boolean(athleteId)}
             registerSpacebarStart={registerSpacebarStart}
+            athleteLabel={contextLabel}
           />
         )}
       </ExerciseRunner>

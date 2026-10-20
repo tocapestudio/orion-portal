@@ -51,6 +51,7 @@ import ExerciseStopButton from '../ui/ExerciseStopButton'
 import ExerciseResultsCard from '../ui/ExerciseResultsCard'
 import type { ExerciseSaveState } from '../ui/ExerciseSaveButton'
 import SpacebarHint from '../ui/SpacebarHint'
+import AthleteTag from '../ui/AthleteTag'
 import { useExerciseFlow } from '../lib/hooks'
 import type { ExerciseOutcome } from '../exercise-runner/ExerciseRunner'
 import { BACKGROUND_HEX, applyContrast } from '../lib/contrast'
@@ -356,9 +357,13 @@ interface ReactionTimeExerciseProps {
    * pulsa Espacio, arranca el ejercicio" SOLO mientras flow.stage==='config'
    * (ver el useEffect mas abajo que lo registra/desregistra). */
   registerSpacebarStart?: (handler: (() => void) | null) => void
+  /** Nombre del atleta de esta ejecucion (ReactionTimeV2Runner.tsx,
+   * reenvia su propio `contextLabel`) - se muestra junto al h1 de abajo
+   * via AthleteTag. Ausente en demo, igual que contextLabel. */
+  athleteLabel?: string
 }
 
-export default function ReactionTimeExercise({ onComplete, canPersist = false, registerSpacebarStart }: ReactionTimeExerciseProps) {
+export default function ReactionTimeExercise({ onComplete, canPersist = false, registerSpacebarStart, athleteLabel }: ReactionTimeExerciseProps) {
   const flow = useExerciseFlow<ExerciseConfig, ReactionTimeMetrics>({
     storageKey: STORAGE_KEY,
     defaultConfig: DEFAULT_CONFIG,
@@ -882,9 +887,19 @@ export default function ReactionTimeExercise({ onComplete, canPersist = false, r
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="mb-3">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Go/No Go</h1>
-        <p className="text-sm text-gray-600">Go/No-Go: haz clic cuando veas la señal GO, no hagas clic cuando veas la señal NO GO</p>
+      {/* Fila flex real (no absolute) entre el titulo y la etiqueta del
+          atleta - evita el solapamiento que habia antes (AthleteTag
+          flotaba via PlayExerciseShell.tsx, por encima de este mismo
+          punto). items-start porque la etiqueta es mas baja que el
+          bloque titulo+subtitulo; flex-wrap para que en pantallas
+          estrechas la etiqueta pase a su propia linea en vez de
+          solaparse o forzar scroll horizontal. */}
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Go/No Go</h1>
+          <p className="text-sm text-gray-600">Go/No-Go: haz clic cuando veas la señal GO, no hagas clic cuando veas la señal NO GO</p>
+        </div>
+        <AthleteTag fullName={athleteLabel} />
       </div>
 
       {flow.stage === 'config' && (

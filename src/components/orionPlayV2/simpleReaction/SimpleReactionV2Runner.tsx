@@ -45,13 +45,11 @@ export default function SimpleReactionV2Runner({ contextLabel, athleteId }: { co
 
   return (
     <div className="mx-auto max-w-6xl">
-      {/* Nombre del atleta eliminado de aqui (ajuste visual posterior a la
-          Fase 3): ahora lo muestra AthleteTag.tsx, junto al boton de volver
-          (ver PlayExerciseShell.tsx) - evita la duplicacion que habia junto
-          al titulo del ejercicio. contextLabel/isDemo siguen intactos: la
-          condicion real de "modo demo" sigue siendo Boolean(athleteId)/
-          !contextLabel, sin cambios funcionales, solo deja de renderizarse
-          como texto aqui. */}
+      {/* contextLabel se reenvia a SimpleReactionExercise.tsx como
+          athleteLabel para que la etiqueta del atleta se renderice junto a
+          su propio h1 (ver ese archivo), en vez de flotar por separado via
+          PlayExerciseShell.tsx (corrige el solapamiento visual que tenia
+          antes). */}
       {isDemo && (
         <div className="mb-2 flex justify-end">
           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
@@ -65,6 +63,7 @@ export default function SimpleReactionV2Runner({ contextLabel, athleteId }: { co
             onComplete={onComplete}
             canPersist={Boolean(athleteId)}
             registerSpacebarStart={registerSpacebarStart}
+            athleteLabel={contextLabel}
           />
         )}
       </ExerciseRunner>

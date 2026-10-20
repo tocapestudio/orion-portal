@@ -30,14 +30,21 @@
  * muestra `fullName`. No es un <button> ni tiene ningun manejador de
  * eventos - no abre ningun panel ni ejecuta ninguna accion al pulsarla.
  *
- * Posicionamiento absoluto (igual criterio que PlayBackLink.tsx, mismo
- * `relative` de PlayExerciseShell.tsx) para no desplazar ni superponerse
- * con el contenido de cada ejercicio (titulo/descripcion), que empieza
- * mas abajo, fuera de esta franja.
+ * Elemento de FLUJO normal (ya NO `absolute`) - se renderiza como hermano
+ * del titulo de cada ejercicio, en la misma fila flex (ver el bloque de
+ * titulo de ReactionTimeExercise.tsx/ClickTargetsExercise.tsx/
+ * VisualMemoryExercise.tsx/SimpleReactionExercise.tsx), para que ambos
+ * puedan compartir espacio real sin superponerse y la fila pueda envolver
+ * en pantallas estrechas (`flex-wrap` en el contenedor que la usa). Antes
+ * vivia en PlayExerciseShell.tsx con `position: absolute`, flotando por
+ * encima del titulo de cada ejercicio (que empieza en el mismo punto,
+ * arriba a la izquierda) - esa superposicion era exactamente el problema
+ * visual que este cambio corrige. PlayBackLink.tsx SIGUE siendo absolute,
+ * sin cambios - ese posicionamiento no participa en este problema.
  *
  * Oculta en rutas /demo (ver isDemoPathname) - ahi fullName nunca se pasa
- * de todas formas (demo/page.tsx no llama a PlayExerciseShell con
- * athleteLabel), asi que esta comprobacion es una segunda capa, no la
+ * de todas formas (ningun *V2Runner.tsx recibe contextLabel en
+ * demo/page.tsx), asi que esta comprobacion es una segunda capa, no la
  * unica.
  */
 
@@ -62,7 +69,7 @@ export default function AthleteTag({ fullName }: { fullName?: string }) {
   if (!fullName || isDemoPathname(pathname)) return null
 
   return (
-    <div className="absolute left-10 top-0 z-10 flex h-8 items-center gap-1.5 rounded-lg border border-orion-navy-200 bg-white px-2.5 text-xs">
+    <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-orion-navy-200 bg-white px-2.5 text-xs">
       <UserIcon className="h-3.5 w-3.5 shrink-0 text-orion-navy-500" />
       <span className="max-w-[9rem] truncate font-medium text-orion-navy-700" title={fullName}>
         {fullName}
