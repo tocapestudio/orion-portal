@@ -2,6 +2,7 @@ import Link from "next/link";
 import SecondaryScreenShell from "@/components/layout/SecondaryScreenShell";
 import { ModuleIcon } from "../moduleMeta";
 import { PLAY_EXERCISES } from "@/components/orionPlay/catalog";
+import PlaySelectedAthleteTag from "@/components/orionPlayV2/ui/PlaySelectedAthleteTag";
 
 /**
  * Catalogo de ORION Play — recupera la estructura real de
@@ -31,9 +32,20 @@ export default function PlayCatalogPage() {
       // izquierdo que la descripcion/grid de abajo, sin ningun ajuste de
       // margen adicional.
       backSlot={
-        <div className="flex items-center gap-3">
-          <ModuleIcon moduleId="play" className="h-7 w-7 text-orion-sky" />
-          <h1 className="text-3xl font-bold text-orion-navy-900">Ejercicios</h1>
+        // flex-wrap + justify-between: mismo patron ya usado en el titulo
+        // de cada ejercicio (ReactionTimeExercise.tsx/ClickTargetsExercise.tsx/
+        // VisualMemoryExercise.tsx/SimpleReactionExercise.tsx) para que la
+        // etiqueta del deportista comparta fila con el titulo sin
+        // solaparse, y pase a su propia linea en pantallas estrechas en
+        // vez de forzar scroll horizontal. El bloque icono+h1 interior
+        // queda exactamente igual que antes, solo con un contenedor nuevo
+        // alrededor.
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <ModuleIcon moduleId="play" className="h-7 w-7 text-orion-sky" />
+            <h1 className="text-3xl font-bold text-orion-navy-900">Ejercicios</h1>
+          </div>
+          <PlaySelectedAthleteTag />
         </div>
       }
     >
