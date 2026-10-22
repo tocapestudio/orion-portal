@@ -23,8 +23,23 @@
  * fullscreen, ReadyScreen, RunningScreen, FeedbackScreen, ResultsScreen,
  * storageKey 'reactionTime_defaults', mecanica Go/No-Go, temporizacion
  * (WAIT_MIN_MS/WAIT_MAX_MS/GO_STIMULUS_TIMEOUT_MS/NO_GO_DISPLAY_MS/RESULT_DISPLAY_MS),
- * calculo de metricas, textos, abortRef, handleRestart- es literal al
+ * calculo de metricas, textos, abortRef, handleRestart- era literal al
  * original. No se conecta onPersist ni ninguna persistencia aqui.
+ *
+ * EXCEPCION (2026-10-22, 2 fases): la decision de GO/NO-GO en modo
+ * 'random' ya NO es literal al original de V.2.
+ * Fase 1: se corrigio un bug real (goRatio se ignoraba por completo en
+ * ese modo, usando 50/50 fijo pese a que la UI mostraba/permitia ajustar
+ * ese mismo porcentaje) extrayendo la logica a ./reactionTimeStimulus.ts
+ * (decideRandomIsGo).
+ * Fase 2 (rediseño): en 'random' el profesional YA NO configura ningun
+ * porcentaje - el sistema sortea una probabilidad GO entre 50%-90% al
+ * iniciar cada sesion (drawSessionGoRatio, sessionGoRatioRef mas abajo)
+ * y la usa fija durante toda esa sesion. 'fixed' no se toco en ninguna
+ * fase: sigue siendo cuota exacta configurada por el profesional.
+ * Ver ./reactionTimeStimulus.ts y runExercise mas abajo para el detalle;
+ * no se toco la temporizacion ni el avance automatico (siguen siendo
+ * literales al original).
  *
  * NOTA sobre lint (react-hooks/refs, desactivada para todo el archivo):
  * useExerciseFlow devuelve, en el mismo objeto, tanto refs (fullscreenRef,
@@ -55,6 +70,7 @@ import AthleteTag from '../ui/AthleteTag'
 import { useExerciseFlow } from '../lib/hooks'
 import type { ExerciseOutcome } from '../exercise-runner/ExerciseRunner'
 import { BACKGROUND_HEX, applyContrast } from '../lib/contrast'
+import { buildFixedSequence, decideRandomIsGo, drawSessionGoRatio } from './reactionTimeStimulus'
 
 // ============ ICONOS (inline SVG, equivalentes a @heroicons/react/24/outline) ============
 
@@ -111,21 +127,10 @@ type TrialState = 'waiting' | 'go' | 'no-go' | 'result'
 type EndMode = 'repetitions' | 'time'
 type GoDistribution = 'fixed' | 'random'
 
-/** Genera una secuencia de `total` booleanos (true = GO) con exactamente
- * round(total*ratio) GO, barajada con Fisher-Yates. Pura: no toca refs ni
- * estado, se recalcula en cada llamada a runExercise (cada ejecucion,
- * incluido "Repetir", obtiene un orden nuevo). */
-function buildFixedSequence(total: number, ratio: number): boolean[] {
-  const goCount = Math.min(total, Math.max(0, Math.round(total * ratio)))
-  const sequence = Array.from({ length: total }, (_, i) => i < goCount)
-  for (let i = sequence.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    const tmp = sequence[i]
-    sequence[i] = sequence[j]
-    sequence[j] = tmp
-  }
-  return sequence
-}
+// buildFixedSequence/decideRandomIsGo: movidas a ./reactionTimeStimulus.ts
+// (logica pura, sin imports de React/Next.js) para poder probarlas con
+// node --test - ver ese archivo para el detalle completo, incluido por
+// que decideRandomIsGo existe (corrige que 'random' ignorase goRatio).
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -423,6 +428,18 @@ export default function ReactionTimeExercise({ onComplete, canPersist = false, r
   // actions.ts).
   const idempotencyKeyRef = useRef('')
 
+  // Probabilidad GO real de ESTA sesion en modo 'random' (incluido
+  // 'time', que fuerza 'random' - ver runExercise): sorteada UNA VEZ en
+  // handleOpenFullscreen (mismo instante que idempotencyKeyRef) via
+  // drawSessionGoRatio(), y reutilizada sin cambios por cada sorteo
+  // independiente de decideRandomIsGo durante toda la sesion. En modo
+  // 'fixed' guarda cfg.goRatio (el valor elegido por el profesional) por
+  // consistencia, aunque runExercise no la lee en ese modo (usa
+  // buildFixedSequence directamente). El valor inicial (DEFAULT_CONFIG.
+  // goRatio) solo existe antes de la primera ejecucion real; se
+  // sobrescribe siempre en handleOpenFullscreen antes de cualquier trial.
+  const sessionGoRatioRef = useRef(DEFAULT_CONFIG.goRatio)
+
   // Captura de la configuracion EFECTIVA de esta ejecucion (fiabilidad de
   // datos, Fase A): snapshot inmutable de flow.configRef.current, tomado
   // en el MISMO instante que idempotencyKeyRef (en handleOpenFullscreen,
@@ -451,7 +468,24 @@ export default function ReactionTimeExercise({ onComplete, canPersist = false, r
   const handleOpenFullscreen = useCallback(async () => {
     resetMetrics()
     idempotencyKeyRef.current = crypto.randomUUID()
-    effectiveConfigRef.current = { ...flow.configRef.current }
+    const cfg = flow.configRef.current
+    // Sorteo de sesion (modo 'random'/'time' forzado a 'random') o valor
+    // configurado por el profesional ('fixed') - ver sessionGoRatioRef
+    // mas arriba. effectiveConfigRef.current.goRatio se sobrescribe con
+    // este mismo valor (nunca con cfg.goRatio directamente) para que la
+    // configuracion efectiva persistida refleje la probabilidad REAL
+    // usada por esta sesion, no un valor de UI que en 'random' ni
+    // siquiera se muestra ya. Esto ya deja la probabilidad sorteada
+    // identificable en core.session_activities.config_used.goRatio (sin
+    // ningun cambio de esquema) en cuanto se guarde el resultado.
+    // MEJORA FUTURA, no implementada aqui (fuera de alcance de este
+    // cambio): mostrar ese valor en Rendimiento Visual exigiria que
+    // playResults.ts/RendimientoVisualClient.tsx lo lean de
+    // config_used (hoy solo leen metricas, nunca configuracion) - sigue
+    // identificable en los datos, no visible todavia en esa pantalla.
+    const effectiveDistribution: GoDistribution = cfg.endMode === 'time' ? 'random' : cfg.goDistribution
+    sessionGoRatioRef.current = effectiveDistribution === 'random' ? drawSessionGoRatio() : cfg.goRatio
+    effectiveConfigRef.current = { ...cfg, goRatio: sessionGoRatioRef.current }
     setCurrentTrial(0)
     setLastReactionTime(null)
     setLastTrialResult(null)
@@ -467,12 +501,12 @@ export default function ReactionTimeExercise({ onComplete, canPersist = false, r
   const runExercise = useCallback(async () => {
     const cfg = flow.configRef.current
     const totalTrials = cfg.totalTrials
-    // goRatio SOLO se usa para 'fixed' (via buildFixedSequence, mas
-    // abajo). 'random' ya NO lo usa en absoluto: cada estimulo se decide
-    // con 50% GO / 50% NO GO fijo, independiente del valor configurado en
-    // goRatio (ver `isGo` mas abajo) - goRatio se conserva en la config/
-    // localStorage sin cambios, simplemente deja de leerse para generar
-    // la secuencia en este modo.
+    // goRatio (configurado por el profesional) SOLO se usa aqui para
+    // 'fixed' (via buildFixedSequence, mas abajo): cuota exacta sobre el
+    // total. 'random' ya NO lo lee - usa sessionGoRatioRef.current (ver
+    // mas arriba y ./reactionTimeStimulus.ts), la probabilidad sorteada
+    // UNA VEZ para esta sesion en handleOpenFullscreen, no un valor de UI
+    // (en 'random' el profesional ni siquiera puede configurarlo).
     const goRatio = cfg.goRatio
     // Defensivo: 'fixed' exige conocer el numero de trials de antemano,
     // algo que no existe en modo 'time'. La UI ya fuerza 'random' al
@@ -482,9 +516,10 @@ export default function ReactionTimeExercise({ onComplete, canPersist = false, r
     const effectiveDistribution: GoDistribution = cfg.endMode === 'time' ? 'random' : cfg.goDistribution
     // 'fixed': buildFixedSequence garantiza EXACTAMENTE round(totalTrials*goRatio)
     // GO, orden barajado (Fisher-Yates) - sin cambios.
-    // 'random': ya no se precalcula ninguna secuencia (sequence=null) -
-    // cada trial decide su propio isGo mas abajo, en el momento, sin
-    // cuota ni memoria de los estimulos anteriores.
+    // 'random': no se precalcula ninguna secuencia (sequence=null) - cada
+    // trial decide su propio isGo mas abajo, en el momento, con
+    // decideRandomIsGo(sessionGoRatioRef.current) (probabilidad sorteada
+    // UNA VEZ para esta sesion, no goRatio de la config - ver mas abajo).
     const sequence = effectiveDistribution === 'fixed' ? buildFixedSequence(totalTrials, goRatio) : null
     const intervalLo = Math.min(cfg.intervalMinMs, cfg.intervalMaxMs)
     const intervalHi = Math.max(cfg.intervalMinMs, cfg.intervalMaxMs)
@@ -510,13 +545,18 @@ export default function ReactionTimeExercise({ onComplete, canPersist = false, r
 
       // 'fixed': toma el valor ya decidido de antemano en `sequence`
       // (cuota exacta, orden barajado). 'random': se decide AQUI, en el
-      // momento, sin mirar nada de lo anterior ni ninguna cuota - 50/50
-      // fijo, no goRatio. Cada llamada a Math.random() es independiente
-      // de la anterior por definicion: nada en este bloque recuerda
-      // cuantos GO/NO-GO han salido hasta ahora, asi que pueden salir
-      // rachas desiguales (varios GO seguidos, o varios NO-GO seguidos)
-      // sin ninguna correccion que las evite.
-      const isGo = sequence ? sequence[trial] : Math.random() < 0.5
+      // momento, con decideRandomIsGo(sessionGoRatioRef.current) - sorteo
+      // independiente con la probabilidad sorteada UNA VEZ para esta
+      // sesion (handleOpenFullscreen, via drawSessionGoRatio - ver
+      // ./reactionTimeStimulus.ts), fija durante toda la sesion pero
+      // nunca configurada por el profesional en este modo. Cada sorteo
+      // de intento es independiente del anterior por definicion: nada en
+      // este bloque recuerda cuantos GO/NO-GO han salido hasta ahora, asi
+      // que pueden salir rachas desiguales (varios GO seguidos, o varios
+      // NO-GO seguidos) sin ninguna correccion que las evite - esto es
+      // intencional (ver auditoria de la incidencia de Go/No Go), no se
+      // introduce alternancia forzada ni limite de racha.
+      const isGo = sequence ? sequence[trial] : decideRandomIsGo(sessionGoRatioRef.current)
 
       if (isGo) {
         setTrialState('go')
@@ -1046,23 +1086,26 @@ function ConfigScreen({ config, setConfig, displayGoColor, displayNoGoColor, def
   onSaveDefaults: () => void
   onStart: () => void
 }) {
-  // "Ratio fijo": buildFixedSequence (ver mas arriba en este archivo)
+  // "Ratio fijo": buildFixedSequence (ver ./reactionTimeStimulus.ts)
   // garantiza exactamente round(totalTrials*goRatio) GO, solo el ORDEN se
-  // sortea (Fisher-Yates) - por eso "exacto". Unico caso que muestra el
-  // porcentaje configurado: es el unico modo que de verdad lo respeta.
+  // sortea (Fisher-Yates) - por eso "exacto". Unico modo donde el
+  // profesional configura goRatio; unico caso que muestra config.goRatio.
   //
-  // "Ratio aleatorio": ya NO usa goRatio en absoluto (ver runExercise,
-  // `const isGo = sequence ? sequence[trial] : Math.random() < 0.5`) -
-  // cada estimulo es 50% GO / 50% NO-GO, decidido en el momento, sin
-  // cuota ni memoria de los estimulos anteriores. El texto NO debe sugerir
-  // que se aplica el porcentaje configurado (goRatio sigue existiendo en
-  // la config/localStorage, pero deja de leerse aqui) - mensaje fijo,
-  // siempre igual independientemente de goRatio.
+  // "Ratio aleatorio" (y 'time', que fuerza este modo - ver runExercise):
+  // REDISEÑADO (2026-10-22, 2a fase) - el profesional YA NO configura
+  // ningun porcentaje en este modo. El sistema sortea una probabilidad
+  // GO entre 50%-90% al iniciar cada sesion (drawSessionGoRatio) y la
+  // usa fija durante toda esa sesion, con sorteos independientes por
+  // intento (decideRandomIsGo) - sin cuota exacta, sin memoria de los
+  // estimulos anteriores. config.goRatio no tiene ningun papel en este
+  // modo (ni se lee ni se muestra) - el texto NO debe mostrar ningun
+  // porcentaje concreto aqui, porque todavia no existe ninguno hasta que
+  // se inicie la sesion.
   const distributionHint = config.endMode === 'time'
-    ? 'Modo aleatorio en pruebas por tiempo'
+    ? 'Modo aleatorio forzado (prueba por tiempo) · probabilidad GO sorteada automáticamente entre 50%-90% al iniciar la sesión'
     : config.goDistribution === 'fixed'
       ? `${Math.round(config.goRatio * 100)}% exacto · orden aleatorio`
-      : 'Cada estímulo se decide al azar, sin proporción fija'
+      : 'Probabilidad GO sorteada automáticamente entre 50%-90% al iniciar la sesión'
 
   const sectionLabel = 'mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500'
   const sliderClass = 'w-44 sm:w-48 h-2 bg-gray-200 rounded-lg cursor-pointer accent-orion-navy-600'
@@ -1200,20 +1243,23 @@ function ConfigScreen({ config, setConfig, displayGoColor, displayNoGoColor, def
             {/* Ratio GO deliberadamente justo debajo del toggle, sin
                 etiqueta de seccion propia, para que se perciba como parte
                 de la misma decision (fijo/aleatorio) y no como un slider
-                suelto. Solo se muestra en "Ratio fijo": en "Ratio
-                aleatorio" goRatio YA NO se usa en absoluto (antes si se
-                seguia usando como probabilidad interna; ver runExercise
-                para el cambio real) - cada estimulo es 50%/50% fijo, sin
-                cuota, asi que mostrar o dejar ajustar este slider en ese
-                modo seria enganoso. El valor de goRatio se conserva igual
-                en la config/localStorage (no se borra ni se resetea),
-                simplemente deja de leerse para "Ratio aleatorio" - si el
-                usuario vuelve a "Ratio fijo", el ultimo valor usado sigue
-                ahi. min/max 0-1 (en vez de 0.3-0.9 como antes) para que
-                la posicion del thumb corresponda exactamente al
-                porcentaje mostrado (30% queda al 30% de la barra, no al
-                extremo izquierdo). */}
-            {config.goDistribution === 'fixed' && (
+                suelto.
+                REDISEÑADO (2a fase): vuelve a mostrarse SOLO en "Ratio
+                fijo" - no porque "Ratio aleatorio" ignore goRatio (eso ya
+                se corrigio antes), sino porque en el diseño definitivo el
+                profesional YA NO elige ningun porcentaje en ese modo: se
+                sortea automaticamente por sesion (drawSessionGoRatio, ver
+                ./reactionTimeStimulus.ts) - mostrar un slider que no hace
+                nada (no hay nada que configurar) volveria a ser lo
+                enganoso. `&& config.endMode !== 'time'` cubre un caso
+                borde real: si goDistribution quedo guardado como 'fixed'
+                justo antes de cambiar a endMode='time' (que fuerza
+                'random' en runExercise), sin este extra el slider se
+                mostraria pese a que ese valor ya no tiene ningun efecto.
+                min/max 0-1 (no 0.3-0.9) para que la posicion del thumb
+                corresponda exactamente al porcentaje mostrado (30% queda
+                al 30% de la barra, no al extremo izquierdo). */}
+            {config.goDistribution === 'fixed' && config.endMode !== 'time' && (
               <div className="mt-2.5 flex items-center gap-3">
                 <input type="range" min={0} max={1} step={0.1} value={config.goRatio}
                   onChange={(e) => setConfig((c) => ({ ...c, goRatio: parseFloat(e.target.value) }))}
