@@ -2988,6 +2988,136 @@ export type Database = {
           },
         ]
       }
+      tool_activities: {
+        Row: {
+          config_used: Json
+          ended_at: string | null
+          group_observation: string | null
+          id: string
+          mode: string
+          professional_id: string
+          started_at: string
+          status: string
+          tool_type: string
+        }
+        Insert: {
+          config_used: Json
+          ended_at?: string | null
+          group_observation?: string | null
+          id?: string
+          mode: string
+          professional_id: string
+          started_at?: string
+          status?: string
+          tool_type: string
+        }
+        Update: {
+          config_used?: Json
+          ended_at?: string | null
+          group_observation?: string | null
+          id?: string
+          mode?: string
+          professional_id?: string
+          started_at?: string
+          status?: string
+          tool_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tool_activities_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "professionals"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      tool_activity_participants: {
+        Row: {
+          activity_mode: string
+          activity_started_at: string
+          activity_tool_type: string
+          athlete_id: string
+          created_at: string
+          id: string
+          individual_observation: string | null
+          tool_activity_id: string
+        }
+        Insert: {
+          activity_mode: string
+          activity_started_at: string
+          activity_tool_type: string
+          athlete_id: string
+          created_at?: string
+          id?: string
+          individual_observation?: string | null
+          tool_activity_id: string
+        }
+        Update: {
+          activity_mode?: string
+          activity_started_at?: string
+          activity_tool_type?: string
+          athlete_id?: string
+          created_at?: string
+          id?: string
+          individual_observation?: string | null
+          tool_activity_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tool_activity_participants_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tool_activity_participants_tool_activity_id_fkey"
+            columns: ["tool_activity_id"]
+            isOneToOne: false
+            referencedRelation: "tool_activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tool_presets: {
+        Row: {
+          config: Json
+          created_at: string
+          id: string
+          name: string
+          professional_id: string
+          tool_type: string
+          updated_at: string
+        }
+        Insert: {
+          config: Json
+          created_at?: string
+          id?: string
+          name: string
+          professional_id: string
+          tool_type: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          id?: string
+          name?: string
+          professional_id?: string
+          tool_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tool_presets_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "professionals"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       training_plans: {
         Row: {
           athlete_id: string
@@ -3200,6 +3330,16 @@ export type Database = {
           valid: boolean
         }[]
       }
+      create_tool_activity: {
+        Args: {
+          p_config_used: Json
+          p_group_observation: string
+          p_mode: string
+          p_participants: Json
+          p_tool_type: string
+        }
+        Returns: string
+      }
       current_device_id: { Args: never; Returns: string }
       evaluation_template_measure_has_results: {
         Args: { measure_id: string }
@@ -3216,6 +3356,10 @@ export type Database = {
         Returns: boolean
       }
       is_professional_of_club: { Args: { p_club_id: string }; Returns: boolean }
+      is_professional_of_tool_activity: {
+        Args: { p_tool_activity_id: string }
+        Returns: boolean
+      }
       is_self_athlete: { Args: { p_athlete_id: string }; Returns: boolean }
       redeem_guardian_invitation: { Args: { p_code: string }; Returns: string }
       redeem_invitation: { Args: { p_code: string }; Returns: string }

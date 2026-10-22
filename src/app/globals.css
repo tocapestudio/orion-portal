@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+/* Rajdhani (SIL Open Font License 1.1, Indian Type Foundry 2014) - copia
+   local en public/fonts/ (rajdhani-600.woff2, rajdhani-700.woff2),
+   descargada una sola vez desde Google Fonts para autohospedarla aqui
+   sin depender de ninguna peticion externa en tiempo de ejecucion. Ver
+   public/fonts/OFL.txt para el texto completo de la licencia (permite
+   explicitamente empaquetar/redistribuir una copia local). Solo pesos
+   600/700, subconjunto latin - los mismos exactos que usa el logotipo
+   "ORION x REACT" de la app ORION React (ver su index.html, .logo span
+   y la composicion de la pantalla de inicio) para la palabra "REACT".
+   Uso EXCLUSIVO aqui: la segunda palabra de los titulos de Visual Lab
+   (ver moduleMeta.tsx, ModuleTitle) - nunca "ORION", nunca el resto del
+   Portal (que sigue en Geist/Geist Mono, sin cambios). */
+@font-face {
+  font-family: "Rajdhani";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/rajdhani-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Rajdhani";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/rajdhani-700.woff2") format("woff2");
+}
+
 :root {
   --background: #f4f6fb;
   --foreground: #101828;
@@ -52,6 +79,10 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Utilidad `font-rajdhani` - ver @font-face arriba. Fallback a la
+     tipografia normal del Portal si, por lo que fuera, el woff2 local no
+     cargase - nunca a un generico sans-serif del sistema. */
+  --font-rajdhani: "Rajdhani", var(--font-geist-sans), Arial, Helvetica, sans-serif;
 
   --color-orion-navy-950: var(--orion-navy-950);
   --color-orion-navy-900: var(--orion-navy-900);
