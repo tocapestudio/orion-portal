@@ -88,3 +88,100 @@ export async function createToolActivity(
 
   return { error: null, activityId: data as string };
 }
+
+/**
+ * 4o incremento (configuracion predeterminada del Generador de
+ * estimulos) - usa DIRECTAMENTE la tabla core.tool_presets via el
+ * cliente de Supabase (sin RPC): esa tabla ya existia desde la migracion
+ * 20261022090000 (pensada exactamente para esto, ver su comentario
+ * "incremento futuro" en StimulusGeneratorClient.tsx) pero NINGUN codigo
+ * la usaba todavia - no hizo falta ninguna migracion/tabla nueva para
+ * este incremento. Confirmado por auditoria antes de escribir esto: sus
+ * 2 politicas RLS (`for all using/with check (professional_id =
+ * auth.uid())`, mas la de admin) ya permiten acceso directo desde un
+ * cliente autenticado normal - no exigen SECURITY DEFINER ni ningun
+ * envoltorio RPC.
+ *
+ * Semantica deliberadamente simple ("LA configuracion predeterminada",
+ * no "varias plantillas con nombre" - aunque la tabla admite nombres):
+ * una unica fila por profesional+tool_type, con `name` fijo a
+ * STIMULUS_PRESET_NAME, nunca expuesto en la UI. Guardar = actualizar esa
+ * fila si ya existe, insertarla si no - sin `upsert()` con `onConflict`
+ * porque la tabla no tiene una restriccion UNIQUE sobre
+ * (professional_id, tool_type, name) y añadirsela seria una migracion,
+ * fuera de alcance de este incremento. La ventana de carrera entre el
+ * SELECT y el INSERT (dos guardados casi simultaneos del MISMO
+ * profesional pulsando el mismo boton dos veces) en el peor caso crearia
+ * una fila duplicada inofensiva, nunca un dato incorrecto - y la lectura
+ * siempre coge la mas reciente (`order by updated_at desc limit 1`), que
+ * la neutraliza igualmente.
+ */
+
+const STIMULUS_PRESET_TOOL_TYPE = "stimulus_generator";
+const STIMULUS_PRESET_NAME = "default";
+
+export interface SaveStimulusPresetResult {
+  error: string | null;
+}
+
+export async function saveStimulusGeneratorDefaultConfig(config: Record<string, unknown>): Promise<SaveStimulusPresetResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida." };
+
+  const { data: existing, error: selectError } = await supabase
+    .from("tool_presets")
+    .select("id")
+    .eq("professional_id", user.id)
+    .eq("tool_type", STIMULUS_PRESET_TOOL_TYPE)
+    .eq("name", STIMULUS_PRESET_NAME)
+    .limit(1)
+    .maybeSingle();
+  if (selectError) return { error: selectError.message };
+
+  if (existing) {
+    const { error } = await supabase
+      .from("tool_presets")
+      .update({ config: config as unknown as Json, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    return { error: error ? error.message : null };
+  }
+
+  const { error } = await supabase.from("tool_presets").insert({
+    professional_id: user.id,
+    tool_type: STIMULUS_PRESET_TOOL_TYPE,
+    name: STIMULUS_PRESET_NAME,
+    config: config as unknown as Json,
+  });
+  return { error: error ? error.message : null };
+}
+
+export interface GetStimulusPresetResult {
+  config: Json | null;
+  error: string | null;
+}
+
+export async function getStimulusGeneratorDefaultConfig(): Promise<GetStimulusPresetResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  // Sin sesion valida: simplemente no hay configuracion predeterminada
+  // que ofrecer - no es un error, el llamador cae a su propio valor por
+  // defecto (ver loadStoredConfig/DEFAULT_STIMULUS_CONFIG).
+  if (!user) return { config: null, error: null };
+
+  const { data, error } = await supabase
+    .from("tool_presets")
+    .select("config")
+    .eq("professional_id", user.id)
+    .eq("tool_type", STIMULUS_PRESET_TOOL_TYPE)
+    .eq("name", STIMULUS_PRESET_NAME)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return { config: null, error: error.message };
+  return { config: data?.config ?? null, error: null };
+}

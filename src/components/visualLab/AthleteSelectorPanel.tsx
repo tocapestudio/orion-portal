@@ -31,6 +31,17 @@
  *   RESULTADOS (dentro de AthletePicker) flotan igual que en 'floating' -
  *   asi la tarjeta no crece ni desplaza nada de debajo mientras se
  *   escribe (ver AthletePicker.tsx para el detalle).
+ *
+ * `excludeIds`/2o parametro de `onSelect` (ORION Tools, "Añadir
+ * participantes"): dos extensiones ADITIVAS, con default que reproduce
+ * el comportamiento anterior exacto para el unico consumidor existente
+ * (VisualLabAthleteCard, que no pasa ninguna de las dos). `excludeIds`
+ * filtra la lista ANTES de pasarsela a AthletePicker (nunca se toca ese
+ * componente) - asi una persona ya seleccionada (la principal, u otro
+ * participante ya añadido) ni siquiera aparece como opcion, en vez de
+ * permitir elegirla y rechazarla despues. El 2o argumento de `onSelect`
+ * (la opcion completa, no solo el id) evita que quien lo necesite tenga
+ * que volver a pedir la lista de deportistas por su cuenta.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -38,7 +49,7 @@ import { getMyAthletesForSelection, type AthleteSelectionOption } from '@/app/(p
 import AthletePicker from '@/components/agenda/AthletePicker'
 
 type AthleteSelectorPanelProps = {
-  onSelect: (athleteId: string) => void
+  onSelect: (athleteId: string, option: AthleteSelectionOption) => void
   variant?: 'floating' | 'inline'
   /** Requeridos solo para 'floating' (ignorados en 'inline', que no tiene
    * boton disparador propio). */
@@ -46,6 +57,9 @@ type AthleteSelectorPanelProps = {
   triggerClassName?: string
   /** Solo relevante en 'inline' - reenviado tal cual a AthletePicker. */
   placeholder?: string
+  /** IDs a excluir de la lista de resultados (p.ej. la persona principal
+   * y los participantes ya añadidos) - por defecto ninguno. */
+  excludeIds?: string[]
 }
 
 export default function AthleteSelectorPanel({
@@ -54,6 +68,7 @@ export default function AthleteSelectorPanel({
   onSelect,
   variant = 'floating',
   placeholder,
+  excludeIds,
 }: AthleteSelectorPanelProps) {
   const [open, setOpen] = useState(false)
   const [athletes, setAthletes] = useState<AthleteSelectionOption[] | null>(null)
@@ -82,25 +97,29 @@ export default function AthleteSelectorPanel({
     loadAthletes()
   }, [loadAthletes])
 
+  const visibleAthletes = excludeIds?.length ? athletes?.filter((a) => !excludeIds.includes(a.id)) ?? null : athletes
+
   const handleSelect = useCallback(
     (id: string) => {
       if (!id) return // AthletePicker reenvia "" si se pulsa "Ninguno" - no se ofrece ese boton (allowNone=false), se ignora por si acaso
-      onSelect(id)
+      const option = athletes?.find((a) => a.id === id)
+      if (!option) return // defensivo: no deberia poder pasar (vendria de la propia lista ya cargada)
+      onSelect(id, option)
       setOpen(false) // no-op en 'inline' (nada lee `open` ahi) - cierra el panel 'floating'
     },
-    [onSelect]
+    [onSelect, athletes]
   )
 
   const resultsContent = (
     <>
       {loading && <p className="text-xs text-orion-navy-400">Cargando usuarios…</p>}
-      {!loading && athletes && athletes.length === 0 && (
+      {!loading && visibleAthletes && visibleAthletes.length === 0 && (
         <p className="text-xs text-orion-navy-400">No tienes usuarios disponibles todavía.</p>
       )}
-      {!loading && athletes && athletes.length > 0 && (
+      {!loading && visibleAthletes && visibleAthletes.length > 0 && (
         <AthletePicker
           name="visual_lab_selected_athlete"
-          athletes={athletes}
+          athletes={visibleAthletes}
           allowNone={false}
           onSelect={handleSelect}
           placeholder={placeholder}
