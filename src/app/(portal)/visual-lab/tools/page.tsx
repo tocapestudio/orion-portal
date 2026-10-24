@@ -46,6 +46,15 @@ function OptotypesIcon({ className }: { className?: string }) {
   );
 }
 
+function OculomotorIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 const TOOLS_ENTRIES: ToolEntry[] = [
   {
     id: "stimulus-generator",
@@ -53,6 +62,13 @@ const TOOLS_ENTRIES: ToolEntry[] = [
     description: "Estímulos visuales configurables (colores, números, letras, formas) para terapia, consulta y entrenamiento.",
     href: "/visual-lab/tools/stimulus-generator",
     icon: StimulusGeneratorIcon,
+  },
+  {
+    id: "oculomotricidad",
+    label: "Oculomotricidad",
+    description: "Seguimiento visual y movimientos sacádicos con trayectorias y estímulos configurables.",
+    href: "/visual-lab/tools/oculomotricidad",
+    icon: OculomotorIcon,
   },
   {
     id: "optotypes",
