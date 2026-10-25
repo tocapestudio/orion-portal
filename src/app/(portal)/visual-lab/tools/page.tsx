@@ -55,6 +55,16 @@ function OculomotorIcon({ className }: { className?: string }) {
   );
 }
 
+function CartasIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="2.5" y="5.5" width="11" height="15" rx="1.5" transform="rotate(-8 8 13)" />
+      <rect x="10.5" y="4.5" width="11" height="15" rx="1.5" />
+      <path d="M14 10h4M14 13.5h4" />
+    </svg>
+  );
+}
+
 const TOOLS_ENTRIES: ToolEntry[] = [
   {
     id: "stimulus-generator",
@@ -69,6 +79,15 @@ const TOOLS_ENTRIES: ToolEntry[] = [
     description: "Seguimiento visual y movimientos sacádicos con trayectorias y estímulos configurables.",
     href: "/visual-lab/tools/oculomotricidad",
     icon: OculomotorIcon,
+  },
+  {
+    id: "cartas",
+    label: "Cartas",
+    description: "Cartas visuales configurables para entrenamiento optométrico.",
+    // Abre Hart directamente: todavia no existe un submenu/hub intermedio
+    // de Cartas (solo esta implementada esta herramienta de momento).
+    href: "/visual-lab/tools/cartas/hart",
+    icon: CartasIcon,
   },
   {
     id: "optotypes",
