@@ -10,12 +10,13 @@
  * DIFERENCIA deliberada con el patron de Oculomotricidad: alli las
  * pestañas cambian un campo de config DENTRO del mismo componente/ruta
  * (dos modalidades de un unico ejercicio). Aqui cada entrada es una
- * HERRAMIENTA independiente con su propia ruta (Hart y McDonald ya la
- * tienen; Panales/Mis cartas todavia no existen) - por eso se navega
- * con <Link>, no con estado local. Las entradas sin `href` (todavia no
- * implementadas) se renderizan como "Próximamente", igual que las
- * tarjetas deshabilitadas del hub de Tools (visual-lab/tools/page.tsx):
- * nunca un enlace que lleve a un error o a una pagina vacia.
+ * HERRAMIENTA independiente con su propia ruta (Hart, McDonald y
+ * Panales ya la tienen; Mis cartas todavia no existe) - por eso se
+ * navega con <Link>, no con estado local. Las entradas sin `href`
+ * (todavia no implementadas) se renderizan como "Próximamente", igual
+ * que las tarjetas deshabilitadas del hub de Tools
+ * (visual-lab/tools/page.tsx): nunca un enlace que lleve a un error o a
+ * una pagina vacia.
  *
  * Añadir una herramienta futura es una entrada mas en CARTAS_NAV_ENTRIES
  * (ponerle `href` cuando exista su ruta), nunca JSX repetido a mano.
@@ -35,7 +36,7 @@ interface CartasNavEntry {
 const CARTAS_NAV_ENTRIES: CartasNavEntry[] = [
   { id: "hart", label: "Hart", href: "/visual-lab/tools/cartas/hart" },
   { id: "mcdonald", label: "McDonald", href: "/visual-lab/tools/cartas/mcdonald" },
-  { id: "panales", label: "Panales", href: null },
+  { id: "panales", label: "Panales", href: "/visual-lab/tools/cartas/panales" },
   { id: "misCartas", label: "Mis cartas", href: null },
 ];
 
