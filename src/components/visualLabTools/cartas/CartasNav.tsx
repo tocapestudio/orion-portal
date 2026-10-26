@@ -10,8 +10,8 @@
  * DIFERENCIA deliberada con el patron de Oculomotricidad: alli las
  * pestañas cambian un campo de config DENTRO del mismo componente/ruta
  * (dos modalidades de un unico ejercicio). Aqui cada entrada es una
- * HERRAMIENTA independiente con su propia ruta (Hart ya la tiene;
- * McDonald/Panales/Mis cartas todavia no existen) - por eso se navega
+ * HERRAMIENTA independiente con su propia ruta (Hart y McDonald ya la
+ * tienen; Panales/Mis cartas todavia no existen) - por eso se navega
  * con <Link>, no con estado local. Las entradas sin `href` (todavia no
  * implementadas) se renderizan como "Próximamente", igual que las
  * tarjetas deshabilitadas del hub de Tools (visual-lab/tools/page.tsx):
@@ -34,7 +34,7 @@ interface CartasNavEntry {
 
 const CARTAS_NAV_ENTRIES: CartasNavEntry[] = [
   { id: "hart", label: "Hart", href: "/visual-lab/tools/cartas/hart" },
-  { id: "mcdonald", label: "McDonald", href: null },
+  { id: "mcdonald", label: "McDonald", href: "/visual-lab/tools/cartas/mcdonald" },
   { id: "panales", label: "Panales", href: null },
   { id: "misCartas", label: "Mis cartas", href: null },
 ];
