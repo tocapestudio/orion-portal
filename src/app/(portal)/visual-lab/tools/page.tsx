@@ -93,7 +93,7 @@ const TOOLS_ENTRIES: ToolEntry[] = [
     id: "optotypes",
     label: "Optotipos",
     description: "Tabla optométrica digital configurable.",
-    href: null,
+    href: "/visual-lab/tools/optotipos",
     icon: OptotypesIcon,
   },
 ];
